@@ -1,782 +1,736 @@
 <!DOCTYPE html>
 <html lang="de">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Belegungsplan</title>
-    <!-- Supabase Bibliothek einbinden -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <style>
-        /* --- GRUND-LAYOUT --- */
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f7f6; color: #333; }
-        h1, h2, h3, h4 { color: #2c3e50; margin-top: 0; }
-        
-        body.mode-gast .admin-only { display: none !important; }
-        body.mode-admin .gast-only { display: none !important; }
-        
-        .box-container { background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
-        
-        /* Flexboxen für die Anordnung */
-        .header-controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
-        .navigation-group { display: flex; align-items: center; gap: 10px; }
-        .flex-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        
-        /* --- BUTTONS --- */
-        .btn { background-color: #3498db; color: white; border: none; padding: 10px 15px; font-size: 14px; border-radius: 5px; cursor: pointer; transition: background 0.3s; text-align: center; }
-        .btn:hover { background-color: #2980b9; }
-        .btn-login { background-color: #2c3e50; font-weight: bold; }
-        .btn-login:hover { background-color: #1a252f; }
-        .btn-accept { background-color: #27ae60; }
-        .btn-accept:hover { background-color: #219150; }
-        .delete-btn { background-color: #e74c3c; }
-        .delete-btn:hover { background-color: #c0392b; }
-        .btn-sync { background-color: #8e44ad; font-weight: bold; }
-        .btn-sync:hover { background-color: #732d91; }
-        .btn-history { background-color: #f39c12; color: #fff; }
-        
-        /* --- FORMULARE --- */
-        .form-container { display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
-        .form-group { display: flex; flex-direction: column; width: 100%; max-width: 250px; }
-        .form-group label { margin-bottom: 5px; font-weight: bold; font-size: 14px; }
-        .form-group input, .form-group select { padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box;}
-        
-        /* --- TABELLEN & KALENDER --- */
-        .table-wrapper { overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch; }
-        .kalender-container { overflow-x: auto; max-height: 65vh; position: relative; -webkit-overflow-scrolling: touch; }
-        
-        table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 800px; }
-        th, td { border: 1px solid #ddd; padding: 12px 5px; text-align: center; font-size: 13px; white-space: nowrap; }
-        
-        th { background-color: #2c3e50; color: white; position: sticky; z-index: 10; }
-        #tageKopfMonate th { top: 0; }
-        .ansicht-monat #tageKopfTage th { top: 0; } 
-        .ansicht-jahr #tageKopfTage th { top: 41px; } 
-        
-        .sticky-col { position: sticky; left: 0; z-index: 20; background-color: #ecf0f1; font-weight: bold; text-align: left; padding-left: 10px; min-width: 90px; border-right: 2px solid #bdc3c7;}
-        th.sticky-col { z-index: 30; background-color: #1a252f; border-right: 2px solid #1a252f; }
-        
-        /* --- KALENDER INTERAKTION & FARBEN --- */
-        .frei { background-color: #fdfdfd; cursor: pointer; transition: background 0.2s; }
-        .frei:hover { background-color: #e8f4f8; }
-        .klick-start { background-color: #f1c40f !important; color: black !important; font-weight: bold; box-shadow: inset 0 0 5px rgba(0,0,0,0.5); }
-        
-        .belegt { font-weight: bold; position: relative; }
-        body.mode-admin .belegt { cursor: pointer; } 
-        
-        .farbe-w0 { --bg: #3498db; } .farbe-w1 { --bg: #e67e22; }
-        .farbe-w2 { --bg: #9b59b6; } .farbe-w3 { --bg: #27ae60; }
-        .farbe-w4 { --bg: #c0392b; }
-        .voll-belegt { background-color: var(--bg); color: white; }
-        .halb-out { background: linear-gradient(to right, var(--bg) 50%, #fdfdfd 50%); color: #333; }
-        .halb-in { background: linear-gradient(to right, #fdfdfd 50%, var(--bg) 50%); color: #333; }
-        .wechseltag { background: repeating-linear-gradient(45deg, var(--bg), var(--bg) 10px, rgba(255,255,255,0.4) 10px, rgba(255,255,255,0.4) 20px); color: #fff; text-shadow: 1px 1px 2px black; }
-        @media (hover: hover) {
-            .belegt:hover::after {
-                content: attr(data-info); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
-                background-color: #333; color: #fff; padding: 5px 10px; border-radius: 4px; 
-                white-space: pre; text-align: center; font-size: 12px; z-index: 40; margin-bottom: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-            }
-        }
-        .listen-tabelle th { background-color: #7f8c8d; position: static; color: white;}
-        
-        .modus-banner { text-align: center; padding: 10px; font-weight: bold; margin-bottom: 20px; border-radius: 8px;}
-        body.mode-gast .modus-banner { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-        body.mode-admin .modus-banner { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        
-        /* --- MODALS (POP-UPS) --- */
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; padding: 10px; box-sizing: border-box;}
-        .modal-content { background: white; padding: 25px; border-radius: 8px; width: 100%; max-width: 450px; max-height: 90vh; overflow-y: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.3); box-sizing: border-box;}
-        .modal-content.wide { max-width: 700px; }
-        .modal-content h3 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;}
-        .modal-details { background: #ecf0f1; padding: 15px; border-radius: 4px; font-size: 14px; margin-bottom: 15px; }
-        .checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
-        .checkbox-grid label { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 5px 0;}
-        .checkbox-grid input { width: 18px; height: 18px; margin: 0; }
-        
-        .status-badge { padding: 8px 12px; border-radius: 15px; font-size: 13px; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; }
-        .status-red { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .status-green { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .history-item { padding: 15px 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;}
-        
-        @media (max-width: 768px) {
-            body { margin: 10px; }
-            .box-container { padding: 15px 10px; }
-            .header-controls { flex-direction: column; align-items: stretch; text-align: center; }
-            .flex-row { flex-direction: column; align-items: stretch; width: 100%; }
-            .navigation-group { flex-wrap: wrap; justify-content: center; }
-            .btn { width: 100%; padding: 14px; font-size: 16px; margin-bottom: 8px;}
-            .navigation-group .btn { width: auto; flex-grow: 1; }
-            .navigation-group select, .navigation-group input { flex-grow: 2; width: auto; }
-            .form-container { flex-direction: column; align-items: stretch; }
-            .form-group { max-width: 100%; width: 100%; }
-            .checkbox-grid { grid-template-columns: 1fr; }
-            .table-wrapper { padding-bottom: 10px; border-bottom: 1px solid #ddd; }
-            .history-item { flex-direction: column; align-items: flex-start; }
-            .history-item .btn { width: 100%; margin-top: 5px; }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Belegungsplan</title>
+<!-- Supabase Bibliothek einbinden -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* --- GRUND-LAYOUT --- */
+body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f7f6; color: #333; }
+h1, h2, h3, h4 { color: #2c3e50; margin-top: 0; }
+body.mode-gast .admin-only { display: none !important; }
+body.mode-admin .gast-only { display: none !important; }
+.box-container { background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+/* Flexboxen für die Anordnung */
+.header-controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+.navigation-group { display: flex; align-items: center; gap: 10px; }
+.flex-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+/* --- BUTTONS --- */
+.btn { background-color: #3498db; color: white; border: none; padding: 10px 15px; font-size: 14px; border-radius: 5px; cursor: pointer; transition: background 0.3s; text-align: center; }
+.btn:hover { background-color: #2980b9; }
+.btn-login { background-color: #2c3e50; font-weight: bold; }
+.btn-login:hover { background-color: #1a252f; }
+.btn-accept { background-color: #27ae60; }
+.btn-accept:hover { background-color: #219150; }
+.delete-btn { background-color: #e74c3c; }
+.delete-btn:hover { background-color: #c0392b; }
+.btn-sync { background-color: #8e44ad; font-weight: bold; }
+.btn-sync:hover { background-color: #732d91; }
+.btn-history { background-color: #f39c12; color: #fff; }
+/* --- FORMULARE --- */
+.form-container { display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
+.form-group { display: flex; flex-direction: column; width: 100%; max-width: 250px; }
+.form-group label { margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+.form-group input, .form-group select { padding: 10px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; width: 100%; box-sizing: border-box;}
+/* --- TABELLEN & KALENDER --- */
+.table-wrapper { overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch; }
+.kalender-container { overflow-x: auto; max-height: 65vh; position: relative; -webkit-overflow-scrolling: touch; }
+table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 800px; }
+th, td { border: 1px solid #ddd; padding: 12px 5px; text-align: center; font-size: 13px; white-space: nowrap; }
+th { background-color: #2c3e50; color: white; position: sticky; z-index: 10; }
+#tageKopfMonate th { top: 0; }
+.ansicht-monat #tageKopfTage th { top: 0; }
+.ansicht-jahr #tageKopfTage th { top: 41px; }
+.sticky-col { position: sticky; left: 0; z-index: 20; background-color: #ecf0f1; font-weight: bold; text-align: left; padding-left: 10px; min-width: 90px; border-right: 2px solid #bdc3c7;}
+th.sticky-col { z-index: 30; background-color: #1a252f; border-right: 2px solid #1a252f; }
+/* --- KALENDER INTERAKTION & FARBEN --- */
+.frei { background-color: #fdfdfd; cursor: pointer; transition: background 0.2s; }
+.frei:hover { background-color: #e8f4f8; }
+.klick-start { background-color: #f1c40f !important; color: black !important; font-weight: bold; box-shadow: inset 0 0 5px rgba(0,0,0,0.5); }
+.belegt { font-weight: bold; position: relative; }
+body.mode-admin .belegt { cursor: pointer; }
+.farbe-w0 { --bg: #3498db; } .farbe-w1 { --bg: #e67e22; }
+.farbe-w2 { --bg: #9b59b6; } .farbe-w3 { --bg: #27ae60; }
+.farbe-w4 { --bg: #c0392b; }
+.voll-belegt { background-color: var(--bg); color: white; }
+.halb-out { background: linear-gradient(to right, var(--bg) 50%, #fdfdfd 50%); color: #333; }
+.halb-in { background: linear-gradient(to right, #fdfdfd 50%, var(--bg) 50%); color: #333; }
+.wechseltag { background: repeating-linear-gradient(45deg, var(--bg), var(--bg) 10px, rgba(255,255,255,0.4) 10px, rgba(255,255,255,0.4) 20px); color: #fff; text-shadow: 1px 1px 2px black; }
+@media (hover: hover) {
+.belegt:hover::after {
+content: attr(data-info); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+background-color: #333; color: #fff; padding: 5px 10px; border-radius: 4px;
+white-space: pre; text-align: center; font-size: 12px; z-index: 40; margin-bottom: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+}
+.listen-tabelle th { background-color: #7f8c8d; position: static; color: white;}
+.modus-banner { text-align: center; padding: 10px; font-weight: bold; margin-bottom: 20px; border-radius: 8px;}
+body.mode-gast .modus-banner { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+body.mode-admin .modus-banner { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+/* --- MODALS (POP-UPS) --- */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; padding: 10px; box-sizing: border-box;}
+.modal-content { background: white; padding: 25px; border-radius: 8px; width: 100%; max-width: 450px; max-height: 90vh; overflow-y: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.3); box-sizing: border-box;}
+.modal-content.wide { max-width: 700px; }
+.modal-content h3 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;}
+.modal-details { background: #ecf0f1; padding: 15px; border-radius: 4px; font-size: 14px; margin-bottom: 15px; }
+.checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
+.checkbox-grid label { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 5px 0;}
+.checkbox-grid input { width: 18px; height: 18px; margin: 0; }
+.status-badge { padding: 8px 12px; border-radius: 15px; font-size: 13px; font-weight: bold; display: inline-flex; align-items: center; gap: 5px; }
+.status-red { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+.status-green { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+.history-item { padding: 15px 10px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;}
+@media (max-width: 768px) {
+body { margin: 10px; }
+.box-container { padding: 15px 10px; }
+.header-controls { flex-direction: column; align-items: stretch; text-align: center; }
+.flex-row { flex-direction: column; align-items: stretch; width: 100%; }
+.navigation-group { flex-wrap: wrap; justify-content: center; }
+.btn { width: 100%; padding: 14px; font-size: 16px; margin-bottom: 8px;}
+.navigation-group .btn { width: auto; flex-grow: 1; }
+.navigation-group select, .navigation-group input { flex-grow: 2; width: auto; }
+.form-container { flex-direction: column; align-items: stretch; }
+.form-group { max-width: 100%; width: 100%; }
+.checkbox-grid { grid-template-columns: 1fr; }
+.table-wrapper { padding-bottom: 10px; border-bottom: 1px solid #ddd; }
+.history-item { flex-direction: column; align-items: flex-start; }
+.history-item .btn { width: 100%; margin-top: 5px; }
+}
+</style>
 </head>
 <body class="mode-gast">
-    <div class="header-controls">
-        <h1>Belegungsplan</h1>
-        <div style="width: 100%; max-width: 300px; margin: 0 auto;">
-            <button class="btn btn-login gast-only" onclick="login()">&#128274; Admin Login</button>
-            <button class="btn btn-login admin-only" onclick="logout()">&#128275; Logout (Gast-Modus)</button>
-        </div>
-    </div>
-    
-    <div class="modus-banner gast-only">Gäste-Ansicht: Klicke auf freie Tage im Kalender, um eine Anfrage zu stellen!</div>
-    <div class="modus-banner admin-only">Admin-Ansicht: Du hast volle Kontrolle. Klicke auf Buchungen zum Bearbeiten.</div>
-    
-    <!-- DATEISYNCHRONISATION & BACKUPS (Nur Admin) -->
-    <div class="box-container admin-only">
-        <div style="margin-bottom: 15px;">
-            <strong>Datenbank-Verbindung:</strong><br>
-            <span style="font-size: 13px; color: #555;">Die Daten werden live in deiner Supabase Cloud gespeichert.</span>
-        </div>
-        <div class="flex-row">
-            <div id="syncStatus" class="status-badge status-green" style="flex-grow: 1; justify-content: center;">🟢 Supabase Verbunden</div>
-            <button class="btn btn-history" style="flex-grow: 1; background-color: #27ae60;" onclick="exportiereDatenCSV()">&#128190; CSV Speichern</button>
-            <button class="btn btn-history" style="flex-grow: 1; background-color: #c0392b;" onclick="importiereDatenCSV()">&#128194; CSV Laden</button>
-            <!-- Verstecktes Input-Feld für den Datei-Upload -->
-            <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="verarbeiteCSVImport(event)">
-        </div>
-    </div>
-    
-    <!-- KALENDER STEUERUNG -->
-    <div class="box-container header-controls">
-        <button class="btn" style="background-color: #8e44ad; color: white; margin-bottom: 0;" onclick="ansichtWechseln()">Ansicht: <strong id="ansichtText">Monat</strong></button>
-        <div class="navigation-group" style="width: 100%; max-width: 500px;">
-            <button class="btn" style="margin:0;" onclick="zeitAendern(-1)">&#8592;</button>
-            <select id="monatSelect" style="margin:0;" onchange="direktDatumAuswahl()">
-                <option value="0">Jan.</option> <option value="1">Feb.</option> <option value="2">März</option>
-                <option value="3">Apr.</option> <option value="4">Mai</option> <option value="5">Juni</option>
-                <option value="6">Juli</option> <option value="7">Aug.</option> <option value="8">Sep.</option>
-                <option value="9">Okt.</option> <option value="10">Nov.</option> <option value="11">Dez.</option>
-            </select>
-            <input type="number" id="jahrSelect" style="margin:0;" value="2026" onchange="direktDatumAuswahl()">
-            <button class="btn" style="margin:0;" onclick="zeitAendern(1)">&#8594;</button>
-        </div>
-    </div>
-    
-    <!-- KALENDER TABELLE -->
-    <div class="box-container kalender-container">
-        <table id="kalenderTabelle" class="ansicht-monat">
-            <thead id="kalenderHead">
-                <tr id="tageKopfMonate"></tr>
-                <tr id="tageKopfTage"></tr>
-            </thead>
-            <tbody id="kalenderBody"></tbody>
-        </table>
-    </div>
-    
-    <!-- ANFRAGEN LISTE (Nur Admin) -->
-    <div class="box-container admin-only" id="anfragenContainer">
-        <h3 style="color: #e67e22; margin-top:0;">&#9203; Offene Anfragen</h3>
-        <div class="table-wrapper">
-            <table class="listen-tabelle">
-                <thead><tr><th>Objekt</th><th>Name</th><th>Kontakt</th><th>Anreise</th><th>Abreise</th><th>Aktion</th></tr></thead>
-                <tbody id="anfragenBody"></tbody>
-            </table>
-        </div>
-    </div>
-    
-    <!-- ALLE BUCHUNGEN LISTE (Nur Admin) -->
-    <div class="box-container admin-only">
-        <div class="header-controls" style="margin-bottom: 15px;">
-            <h3 style="margin:0;">Bestätigte Buchungen</h3>
-            <div class="form-group" style="flex-direction: row; align-items: center; max-width: 200px; margin:0;">
-                <label style="margin-right: 10px; margin-bottom:0;">Jahr:</label>
-                <select id="filterJahr" onchange="listenRendern()"></select>
-            </div>
-        </div>
-        <div class="table-wrapper">
-            <table class="listen-tabelle">
-                <thead><tr><th>Objekt</th><th>Gast</th><th>Kontakt</th><th>Anreise</th><th>Abreise</th><th>Aktion</th></tr></thead>
-                <tbody id="listenBody"></tbody>
-            </table>
-        </div>
-    </div>
-    
-    <!-- POPUPS (Modal) -->
-    <div class="modal-overlay" id="bookingModal">
-        <div class="modal-content">
-            <h3 id="modalTitle">Neue Buchung</h3>
-            <div class="form-group"><label>Anreise:</label> <input type="date" id="modalStart" onchange="updateModalDetails()"></div>
-            <div class="form-group" style="margin-top: 10px;"><label>Abreise:</label> <input type="date" id="modalEnd" onchange="updateModalDetails()"></div>
-            <div class="modal-details" style="margin-top: 15px;">
-                <div id="modalNightsInfo" style="margin-bottom: 10px; font-weight: bold;"></div>
-                <label><strong>Gewünschte Objekte:</strong></label>
-                <div class="checkbox-grid" id="modalApartmentCheckboxes"></div>
-            </div>
-            <div class="form-group"><label>Name (Vor- und Nachname):</label><input type="text" id="modalName"></div>
-            <div class="form-group" style="margin-top: 10px; margin-bottom: 20px;"><label>Kontakt (E-Mail oder Telefon):</label><input type="text" id="modalKontakt" placeholder="Pflicht für Gäste"></div>
-            <div class="flex-row">
-                <button class="btn" style="background-color: #95a5a6; flex: 1;" onclick="closeModal()">Abbrechen</button>
-                <button class="btn btn-accept" style="flex: 1;" onclick="submitModal()">Absenden</button>
-            </div>
-        </div>
-    </div>
-    
-    <div class="modal-overlay" id="editModal">
-        <div class="modal-content">
-            <h3>Buchung bearbeiten</h3>
-            <div class="form-group">
-                <label>Objekt:</label>
-                <select id="editWohnung">
-                    <option value="0">Haus</option> <option value="1">App1</option>
-                    <option value="2">App2</option> <option value="3">App3</option> <option value="4">App4</option>
-                </select>
-            </div>
-            <div class="form-group" style="margin-top: 10px;"><label>Anreise:</label> <input type="date" id="editStart"></div>
-            <div class="form-group" style="margin-top: 10px;"><label>Abreise:</label> <input type="date" id="editEnd"></div>
-            <div class="form-group" style="margin-top: 10px;"><label>Name:</label> <input type="text" id="editName"></div>
-            <div class="form-group" style="margin-top: 10px; margin-bottom: 20px;"><label>Kontakt:</label> <input type="text" id="editKontakt"></div>
-            <div class="flex-row">
-                <button class="btn delete-btn" style="flex: 1;" onclick="deleteFromEditModal()">Löschen</button>
-                <button class="btn" style="background-color: #95a5a6; flex: 1;" onclick="closeEditModal()">Abbruch</button>
-                <button class="btn btn-accept" style="flex: 1;" onclick="saveEditModal()">Speichern</button>
-            </div>
-        </div>
-    </div>
-    
-    <div class="modal-overlay" id="historyModal">
-        <div class="modal-content wide">
-            <h3>Historie & Backups (Lokal)</h3>
-            <p style="font-size: 14px; color: #555;">Lokale Snapshots der letzten Aktionen.</p>
-            <div id="historyList" style="max-height: 50vh; overflow-y: auto; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 15px;"></div>
-            <button class="btn" style="background-color: #95a5a6; width: 100%;" onclick="closeHistoryModal()">Schließen</button>
-        </div>
-    </div>
 
-    <!-- KRITISCHER DATENBANK-FEHLER (Sperrt die Seite) -->
-    <div class="modal-overlay" id="dbErrorOverlay" style="z-index: 9999; background-color: rgba(0,0,0,0.85);">
-        <div class="modal-content" style="background-color: #e74c3c; color: white; text-align: center; border: 2px solid #c0392b;">
-            <h2 style="color: white; margin-top: 0; font-size: 24px;">⚠️ Systemfehler</h2>
-            <p style="font-size: 16px; margin-bottom: 20px;">
-                Die Verbindung zur Datenbank ist aktuell gestört.<br>
-                Die Website wurde sicherheitshalber gesperrt.
-            </p>
-            <p style="font-size: 14px; opacity: 0.9;">Bitte lade die Seite in ein paar Minuten neu.</p>
-        </div>
-    </div>
+<div class="header-controls">
+<h1>Belegungsplan</h1>
+<div style="width: 100%; max-width: 300px; margin: 0 auto;">
+<button class="btn btn-login gast-only" onclick="login()">&#128274; Admin Login</button>
+<button class="btn btn-login admin-only" onclick="logout()">&#128275; Logout (Gast-Modus)</button>
+</div>
+</div>
 
-    <!-- LOGIK & SKRIPTE -->
-    <script>
-        // SUPABASE SETUP
-    	const supabaseUrl = 'https://dktoaovetyfqvkrmgprf.supabase.co';
-	    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrdG9hb3ZldHlmcXZrcm1ncHJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0NTE1MjIsImV4cCI6MjA5MzAyNzUyMn0.A1OWtEk5MNgEGiSQMsLXFUCKvKTv2PnEEqH2yl4t2bQ';
-        const _supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-        const ADMIN_PASSWORT_HASH = "d0a9ee3129a6d99d4f555a6e03f9536a868b62961ff6f45c3f039c0c05e58f5b"; 
-        
-        const wohnungen = ["Haus", "App1", "App2", "App3", "App4"];
-        const monatsNamen = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
-        
-        let aktuellesDatum = new Date(); let aktuellerMonat = aktuellesDatum.getMonth(); let aktuellesJahr = aktuellesDatum.getFullYear();
-        let ansichtModus = 'monat'; let istAdmin = false; 
-        
-        // Arrays lokal zur Darstellung
-        let buchungen = [];
-        let anfragen = [];
-        let backupHistorie = JSON.parse(localStorage.getItem("ferienHistorie")) || []; 
-        let klickAuswahl = { aktiv: false, wohnungId: null, startDatum: null, tdElement: null };
-        let modalWohnungId = null; let editingBuchungId = null; 
+<div class="modus-banner gast-only">Gäste-Ansicht: Klicke auf freie Tage im Kalender, um eine Anfrage zu stellen!</div>
+<div class="modus-banner admin-only">Admin-Ansicht: Du hast volle Kontrolle. Klicke auf Buchungen zum Bearbeiten.</div>
 
-        // Daten beim Start aus Supabase laden (mit sofortiger Fehlerprüfung)
-        async function datenInitialLaden() {
-            // 1. Check: Hat das Gerät überhaupt Internet?
-            if (!navigator.onLine) {
-                zeigeDatenbankFehler();
-                return; // Bricht sofort ab
-            }
+<!-- DATEISYNCHRONISATION & BACKUPS (Nur Admin) -->
+<div class="box-container admin-only">
+<div style="margin-bottom: 15px;">
+<strong>Datenbank-Verbindung:</strong><br>
+<span style="font-size: 13px; color: #555;">Die Daten werden live in deiner Supabase Cloud gespeichert.</span>
+</div>
+<div class="flex-row">
+<div id="syncStatus" class="status-badge status-green" style="flex-grow: 1; justify-content: center;">🟢 Supabase Verbunden</div>
+<button class="btn btn-history" style="flex-grow: 1; background-color: #27ae60;" onclick="exportiereDatenCSV()">&#128190; CSV Speichern</button>
+<button class="btn btn-history" style="flex-grow: 1; background-color: #c0392b;" onclick="importiereDatenCSV()">&#128194; CSV Laden</button>
+<!-- Verstecktes Input-Feld für den Datei-Upload -->
+<input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="verarbeiteCSVImport(event)">
+</div>
+</div>
 
-            // 2. Eigener Timeout: Nach 8 Sekunden (8000 Millisekunden) Fehlermeldung erzwingen
-            let timeoutTimer = setTimeout(() => {
-                console.error("Timeout: Datenbank hat nach 8 Sekunden nicht geantwortet.");
-                zeigeDatenbankFehler();
-            }, 2000);
+<!-- KALENDER STEUERUNG -->
+<div class="box-container header-controls">
+<button class="btn" style="background-color: #8e44ad; color: white; margin-bottom: 0;" onclick="ansichtWechseln()">Ansicht: <strong id="ansichtText">Monat</strong></button>
+<div class="navigation-group" style="width: 100%; max-width: 500px;">
+<button class="btn" style="margin:0;" onclick="zeitAendern(-1)">&#8592;</button>
+<select id="monatSelect" style="margin:0;" onchange="direktDatumAuswahl()">
+<option value="0">Jan.</option> <option value="1">Feb.</option> <option value="2">März</option>
+<option value="3">Apr.</option> <option value="4">Mai</option> <option value="5">Juni</option>
+<option value="6">Juli</option> <option value="7">Aug.</option> <option value="8">Sep.</option>
+<option value="9">Okt.</option> <option value="10">Nov.</option> <option value="11">Dez.</option>
+</select>
+<input type="number" id="jahrSelect" style="margin:0;" value="2026" onchange="direktDatumAuswahl()">
+<button class="btn" style="margin:0;" onclick="zeitAendern(1)">&#8594;</button>
+</div>
+</div>
 
-            try {
-                // Buchungen laden
-                const { data: bData, error: bErr } = await _supabase.from('buchungen').select('*');
-                if (bErr) throw new Error("Supabase Fehler: Buchungen konnten nicht geladen werden.");
-                if (bData) buchungen = bData;
-                
-                // Anfragen laden
-                const { data: aData, error: aErr } = await _supabase.from('anfragen').select('*');
-                if (aErr) throw new Error("Supabase Fehler: Anfragen konnten nicht geladen werden.");
-                if (aData) anfragen = aData;
-                
-                // Wenn alles rechtzeitig und erfolgreich war -> Timer abbrechen!
-                clearTimeout(timeoutTimer);
+<!-- KALENDER TABELLE -->
+<div class="box-container kalender-container">
+<table id="kalenderTabelle" class="ansicht-monat">
+<thead id="kalenderHead">
+<tr id="tageKopfMonate"></tr>
+<tr id="tageKopfTage"></tr>
+</thead>
+<tbody id="kalenderBody"></tbody>
+</table>
+</div>
 
-                // Kalender rendern
-                kalenderRendern();
-                if(istAdmin) listenRendern();
+<!-- ANFRAGEN LISTE (Nur Admin) -->
+<div class="box-container admin-only" id="anfragenContainer">
+<h3 style="color: #e67e22; margin-top:0;">&#9203; Offene Anfragen</h3>
+<div class="table-wrapper">
+<table class="listen-tabelle">
+<thead><tr><th>Objekt</th><th>Name</th><th>Kontakt</th><th>Ersteller</th><th>Anreise</th><th>Abreise</th><th>Aktion</th></tr></thead>
+<tbody id="anfragenBody"></tbody>
+</table>
+</div>
+</div>
 
-            } catch (err) {
-                // Bei einem sofortigen Supabase-Fehler den Timer auch stoppen
-                clearTimeout(timeoutTimer); 
-                console.error(err.message);
-                zeigeDatenbankFehler();
-            }
-        }
-        datenInitialLaden(); // Startet den Ladevorgang
+<!-- ALLE BUCHUNGEN LISTE (Nur Admin) -->
+<div class="box-container admin-only">
+<div class="header-controls" style="margin-bottom: 15px;">
+<h3 style="margin:0;">Bestätigte Buchungen</h3>
+<div class="form-group" style="flex-direction: row; align-items: center; max-width: 200px; margin:0;">
+<label style="margin-right: 10px; margin-bottom:0;">Jahr:</label>
+<select id="filterJahr" onchange="listenRendern()"></select>
+</div>
+</div>
+<div class="table-wrapper">
+<table class="listen-tabelle">
+<thead><tr><th>Objekt</th><th>Gast</th><th>Kontakt</th><th>Ersteller</th><th>Anreise</th><th>Abreise</th><th>Aktion</th></tr></thead>
+<tbody id="listenBody"></tbody>
+</table>
+</div>
+</div>
 
-        datenInitialLaden(); // Startet den Ladevorgang
+<!-- POPUPS (Modal) -->
+<div class="modal-overlay" id="bookingModal">
+<div class="modal-content">
+<h3 id="modalTitle">Neue Buchung</h3>
+<div class="form-group"><label>Anreise:</label> <input type="date" id="modalStart" onchange="updateModalDetails()"></div>
+<div class="form-group" style="margin-top: 10px;"><label>Abreise:</label> <input type="date" id="modalEnd" onchange="updateModalDetails()"></div>
+<div class="modal-details" style="margin-top: 15px;">
+<div id="modalNightsInfo" style="margin-bottom: 10px; font-weight: bold;"></div>
+<label><strong>Gewünschte Objekte:</strong></label>
+<div class="checkbox-grid" id="modalApartmentCheckboxes"></div>
+</div>
+<div class="form-group"><label>Name (Vor- und Nachname):</label><input type="text" id="modalName"></div>
+<div class="form-group" style="margin-top: 10px;"><label>Kontakt (E-Mail oder Telefon):</label><input type="text" id="modalKontakt" placeholder="Pflicht für Gäste"></div>
+<div class="form-group" style="margin-top: 10px; margin-bottom: 20px;"><label>Ersteller:</label><input type="text" id="modalErsteller" placeholder="Erstellt von ..."></div>
+<div class="flex-row">
+<button class="btn" style="background-color: #95a5a6; flex: 1;" onclick="closeModal()">Abbrechen</button>
+<button class="btn btn-accept" style="flex: 1;" onclick="submitModal()">Absenden</button>
+</div>
+</div>
+</div>
 
-        // Hilfsfunktionen
-        async function sha256(message) {
-            const msgBuffer = new TextEncoder().encode(message);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-            return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-        function berechneNaechte(startStr, endStr) { return Math.ceil(Math.abs(new Date(endStr) - new Date(startStr)) / (1000 * 60 * 60 * 24)); }
-        function formatDatum(datumStr) { return datumStr.split('-').reverse().join('.'); }
-        function pruefeUeberlappung(wId, neuStart, neuEnd, ignoreId = null) { return buchungen.some(b => b.wohnungId === parseInt(wId) && b.id !== ignoreId && neuStart < b.endDatum && neuEnd > b.startDatum); }
-        function getZeitstempel() { let j = new Date(); return `${j.getDate()}.${j.getMonth()+1}.${j.getFullYear()} - ${String(j.getHours()).padStart(2,'0')}:${String(j.getMinutes()).padStart(2,'0')}`; }
-        
-        function zeigeDatenbankFehler() {
-            document.getElementById("dbErrorOverlay").style.display = "flex";
-            document.body.style.overflow = "hidden"; // Verhindert Scrollen im Hintergrund
-            
-            // Falls der Admin eingeloggt ist, den Status-Button oben aktualisieren
-            let syncStatus = document.getElementById("syncStatus");
-            if(syncStatus) {
-                syncStatus.className = "status-badge status-red";
-                syncStatus.innerHTML = "🔴 Verbindung gestört";
-            }
-        }
+<div class="modal-overlay" id="editModal">
+<div class="modal-content">
+<h3>Buchung bearbeiten</h3>
+<div class="form-group">
+<label>Objekt:</label>
+<select id="editWohnung">
+<option value="0">Haus</option> <option value="1">App1</option>
+<option value="2">App2</option> <option value="3">App3</option> <option value="4">App4</option>
+</select>
+</div>
+<div class="form-group" style="margin-top: 10px;"><label>Anreise:</label> <input type="date" id="editStart"></div>
+<div class="form-group" style="margin-top: 10px;"><label>Abreise:</label> <input type="date" id="editEnd"></div>
+<div class="form-group" style="margin-top: 10px;"><label>Name:</label> <input type="text" id="editName"></div>
+<div class="form-group" style="margin-top: 10px;"><label>Kontakt:</label> <input type="text" id="editKontakt"></div>
+<div class="form-group" style="margin-top: 10px; margin-bottom: 20px;"><label>Ersteller:</label><input type="text" id="editErsteller" placeholder="Erstellt von ..."></div>
+<div class="flex-row">
+<button class="btn delete-btn" style="flex: 1;" onclick="deleteFromEditModal()">Löschen</button>
+<button class="btn" style="background-color: #95a5a6; flex: 1;" onclick="closeEditModal()">Abbruch</button>
+<button class="btn btn-accept" style="flex: 1;" onclick="saveEditModal()">Speichern</button>
+</div>
+</div>
+</div>
 
-        // Login / Logout
-        async function login() {
-            let pwd = prompt("Bitte Admin-Passwort eingeben:");
-            if (!pwd) return;
-            if (await sha256(pwd) === ADMIN_PASSWORT_HASH) {
-                istAdmin = true; document.body.className = "mode-admin"; klickAuswahl.aktiv = false;
-                kalenderRendern(); listenRendern();
-            } else { alert("Falsches Passwort!"); }
-        }
-        function logout() { istAdmin = false; document.body.className = "mode-gast"; klickAuswahl.aktiv = false; kalenderRendern(); }
+<div class="modal-overlay" id="historyModal">
+<div class="modal-content wide">
+<h3>Historie & Backups (Lokal)</h3>
+<p style="font-size: 14px; color: #555;">Lokale Snapshots der letzten Aktionen.</p>
+<div id="historyList" style="max-height: 50vh; overflow-y: auto; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 15px;"></div>
+<button class="btn" style="background-color: #95a5a6; width: 100%;" onclick="closeHistoryModal()">Schließen</button>
+</div>
+</div>
 
-        // Backup lokal speichern (für Notfälle)
-        function erstelleBackup(aktionText) {
-            backupHistorie.unshift({ zeit: getZeitstempel(), aktion: aktionText, daten: JSON.stringify({ buchungen: buchungen, anfragen: anfragen }) });
-            if (backupHistorie.length > 15) backupHistorie = backupHistorie.slice(0, 15);
-            localStorage.setItem("ferienHistorie", JSON.stringify(backupHistorie));
-        }
-        
-        function openHistoryModal() {
-            const listDiv = document.getElementById("historyList"); listDiv.innerHTML = "";
-            if (backupHistorie.length === 0) listDiv.innerHTML = "<div style='padding: 15px;'>Keine Backups.</div>";
-            else {
-                backupHistorie.forEach((backup, index) => {
-                    let info = JSON.parse(backup.daten);
-                    listDiv.innerHTML += `<div class="history-item">
-                            <div><strong>${backup.zeit}</strong><br><span style="font-size: 12px; color: #7f8c8d;">${backup.aktion} (${info.buchungen.length} Buchungen)</span></div>
-                        </div>`;
-                });
-            }
-            document.getElementById("historyModal").style.display = "flex";
-        }
-        function closeHistoryModal() { document.getElementById("historyModal").style.display = "none"; }
+<!-- KRITISCHER DATENBANK-FEHLER (Sperrt die Seite) -->
+<div class="modal-overlay" id="dbErrorOverlay" style="z-index: 9999; background-color: rgba(0,0,0,0.85);">
+<div class="modal-content" style="background-color: #e74c3c; color: white; text-align: center; border: 2px solid #c0392b;">
+<h2 style="color: white; margin-top: 0; font-size: 24px;">⚠️ Systemfehler</h2>
+<p style="font-size: 16px; margin-bottom: 20px;">
+Die Verbindung zur Datenbank ist aktuell gestört.<br>
+Die Website wurde sicherheitshalber gesperrt.
+</p>
+<p style="font-size: 14px; opacity: 0.9;">Bitte lade die Seite in ein paar Minuten neu.</p>
+</div>
+</div>
 
-        // Popups & Formulare
-        function openModal(wIndex, start, end) {
-            document.getElementById("modalTitle").innerText = istAdmin ? "Neue Buchung" : "Buchungsanfrage";
-            document.getElementById("modalStart").value = start; document.getElementById("modalEnd").value = end;
-            let cbContainer = document.getElementById("modalApartmentCheckboxes"); cbContainer.innerHTML = "";
-            wohnungen.forEach((wName, index) => {
-                let isChecked = (index === wIndex) ? "checked" : "";
-                cbContainer.innerHTML += `<label><input type="checkbox" class="multi-wohnung-cb" value="${index}" ${isChecked}> ${wName}</label>`;
-            });
-            updateModalDetails(); document.getElementById("modalName").value = ""; document.getElementById("modalKontakt").value = "";
-            document.getElementById("bookingModal").style.display = "flex";
-        }
-        
-        function updateModalDetails() {
-            let start = document.getElementById("modalStart").value; let end = document.getElementById("modalEnd").value;
-            let infoDiv = document.getElementById("modalNightsInfo");
-            if(start && end && start < end) { infoDiv.innerHTML = `${berechneNaechte(start, end)} Nächte`; infoDiv.style.color = "#333"; } 
-            else { infoDiv.innerHTML = `Datum prüfen!`; infoDiv.style.color = "red"; }
-        }
-        function closeModal() { document.getElementById("bookingModal").style.display = "none"; klickAuswahl.aktiv = false; kalenderRendern(); }
-        
-        async function submitModal() {
-            let start = document.getElementById("modalStart").value; let end = document.getElementById("modalEnd").value;
-            let gastName = document.getElementById("modalName").value.trim(); let kontakt = document.getElementById("modalKontakt").value.trim();
-            if (!start || !end || start >= end) { alert("Bitte prüfe das Datum."); return; }
-            if (gastName === "") { alert("Name fehlt."); return; }
-            if (!istAdmin && kontakt === "") { alert("Kontakt fehlt."); return; }
-            
-            let ausgewaehlteCbs = document.querySelectorAll(".multi-wohnung-cb:checked");
-            if (ausgewaehlteCbs.length === 0) { alert("Bitte Objekt wählen."); return; }
-            let wohnungsIds = Array.from(ausgewaehlteCbs).map(cb => parseInt(cb.value));
-            
-            for (let wId of wohnungsIds) { if (pruefeUeberlappung(wId, start, end)) { alert(`"${wohnungen[wId]}" ist belegt!`); return; } }
-            let neueEintraege = wohnungsIds.map(wId => {
-                return { id: Math.random().toString(36).substr(2, 9), wohnungId: wId, startDatum: start, endDatum: end, gast: gastName, kontakt: kontakt || "-" };
-            });
-            
-            try {
-                if (istAdmin) { 
-                    buchungen.push(...neueEintraege);
-                    const { error } = await _supabase.from('buchungen').insert(neueEintraege);
-                    if (error) throw error;
-                    erstelleBackup("Neue Buchung: " + gastName); 
-                    kalenderRendern(); listenRendern(); 
-                } else { 
-                    anfragen.push(...neueEintraege);
-                    const { error } = await _supabase.from('anfragen').insert(neueEintraege);
-                    if (error) throw error;
-                    erstelleBackup("Neue Anfrage: " + gastName); 
-                    alert("Anfrage gesendet!"); 
-                }
-                closeModal();
-            } catch (error) {
-                console.error(error);
-                zeigeDatenbankFehler();
-            }
-        }
+<!-- LOGIK & SKRIPTE -->
+<script>
+// SUPABASE SETUP
+const supabaseUrl = 'https://dktoaovetyfqvkrmgprf.supabase.co';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrdG9hb3ZldHlmcXZrcm1ncHJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0NTE1MjIsImV4cCI6MjA5MzAyNzUyMn0.A1OWtEk5MNgEGiSQMsLXFUCKvKTv2PnEEqH2yl4t2bQ';
+const _supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+const ADMIN_PASSWORT_HASH = "d0a9ee3129a6d99d4f555a6e03f9536a868b62961ff6f45c3f039c0c05e58f5b";
+const wohnungen = ["Haus", "App1", "App2", "App3", "App4"];
+const monatsNamen = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 
-        // Edit Popups
-        function openEditModal(id) {
-            let buchung = buchungen.find(b => b.id === id); if(!buchung) return;
-            editingBuchungId = id; document.getElementById("editWohnung").value = buchung.wohnungId; document.getElementById("editStart").value = buchung.startDatum;
-            document.getElementById("editEnd").value = buchung.endDatum; document.getElementById("editName").value = buchung.gast; document.getElementById("editKontakt").value = buchung.kontakt;
-            document.getElementById("editModal").style.display = "flex";
-        }
-        function closeEditModal() { document.getElementById("editModal").style.display = "none"; editingBuchungId = null; }
-        
-        async function saveEditModal() {
-            let wId = document.getElementById("editWohnung").value; let start = document.getElementById("editStart").value; let end = document.getElementById("editEnd").value;
-            let name = document.getElementById("editName").value.trim(); let kontakt = document.getElementById("editKontakt").value.trim();
-            if (!start || !end || start >= end) { alert("Datum prüfen!"); return; }
-            if (name === "") { alert("Name fehlt."); return; }
-            if (pruefeUeberlappung(wId, start, end, editingBuchungId)) { alert("Überschneidung!"); return; }
-            
-            let index = buchungen.findIndex(b => b.id === editingBuchungId);
-            if(index !== -1) {
-                // Alte Werte für den Fehlerfall speichern
-                let alteWerte = { ...buchungen[index] };
-                
-                buchungen[index].wohnungId = parseInt(wId); buchungen[index].startDatum = start; buchungen[index].endDatum = end;
-                buchungen[index].gast = name; buchungen[index].kontakt = kontakt || "-";
-                
-                try {
-                    const { error } = await _supabase.from('buchungen').update({
-                        wohnungId: parseInt(wId), startDatum: start, endDatum: end, gast: name, kontakt: kontakt || "-"
-                    }).eq('id', editingBuchungId);
-                    if (error) throw error;
-                    
-                    erstelleBackup("Bearbeitet: " + name); kalenderRendern(); listenRendern(); closeEditModal();
-                } catch (error) {
-                    console.error(error);
-                    buchungen[index] = alteWerte; // Rückgängig bei Fehler
-                    zeigeDatenbankFehler();
-                }
-            }
-        }
-        
-        async function deleteFromEditModal() {
-            let b = buchungen.find(x => x.id === editingBuchungId);
-            if(confirm("Wirklich löschen?")) {
-                let geloescht = buchungen.filter(x => x.id === editingBuchungId);
-                buchungen = buchungen.filter(x => x.id !== editingBuchungId);
-                
-                try {
-                    const { error } = await _supabase.from('buchungen').delete().eq('id', editingBuchungId);
-                    if (error) throw error;
-                    
-                    erstelleBackup("Gelöscht: " + (b?b.gast:"")); kalenderRendern(); listenRendern(); closeEditModal();
-                } catch (error) {
-                    console.error(error);
-                    buchungen.push(...geloescht); // Rückgängig bei Fehler
-                    zeigeDatenbankFehler();
-                }
-            }
-        }
+let aktuellesDatum = new Date(); let aktuellerMonat = aktuellesDatum.getMonth(); let aktuellesJahr = aktuellesDatum.getFullYear();
+let ansichtModus = 'monat'; let istAdmin = false;
 
-        // Kalender Rendern & Navigation
-        function ansichtWechseln() { ansichtModus = ansichtModus === 'monat' ? 'jahr' : 'monat'; document.getElementById("ansichtText").innerText = ansichtModus === 'monat' ? 'Monat' : 'Jahr'; klickAuswahl.aktiv = false; kalenderRendern(); }
-        function direktDatumAuswahl() { aktuellerMonat = parseInt(document.getElementById("monatSelect").value); aktuellesJahr = parseInt(document.getElementById("jahrSelect").value); if(ansichtModus === 'jahr') { ansichtModus = 'monat'; document.getElementById("ansichtText").innerText = 'Monat'; } klickAuswahl.aktiv = false; kalenderRendern(); }
-        function zeitAendern(verschiebung) { klickAuswahl.aktiv = false; if (ansichtModus === 'monat') { aktuellerMonat += verschiebung; if (aktuellerMonat > 11) { aktuellerMonat = 0; aktuellesJahr++; } else if (aktuellerMonat < 0) { aktuellerMonat = 11; aktuellesJahr--; } } else { aktuellesJahr += verschiebung; } kalenderRendern(); }
-        
-        function kalenderRendern() {
-            document.getElementById("kalenderTabelle").className = ansichtModus === 'monat' ? 'ansicht-monat' : 'ansicht-jahr';
-            document.getElementById("monatSelect").value = aktuellerMonat; document.getElementById("jahrSelect").value = aktuellesJahr;
-            document.getElementById("monatSelect").style.display = (ansichtModus === 'jahr') ? 'none' : 'block';
+// Arrays lokal zur Darstellung
+let buchungen = [];
+let anfragen = [];
+let backupHistorie = JSON.parse(localStorage.getItem("ferienHistorie")) || [];
+let klickAuswahl = { aktiv: false, wohnungId: null, startDatum: null, tdElement: null };
+let modalWohnungId = null; let editingBuchungId = null;
 
-            const kopfMonate = document.getElementById("tageKopfMonate"); const kopfTage = document.getElementById("tageKopfTage"); const body = document.getElementById("kalenderBody");
-            kopfMonate.innerHTML = ""; kopfTage.innerHTML = ""; body.innerHTML = "";
+// Daten beim Start aus Supabase laden (mit sofortiger Fehlerprüfung)
+async function datenInitialLaden() {
+if (!navigator.onLine) { zeigeDatenbankFehler(); return; }
+let timeoutTimer = setTimeout(() => {
+console.error("Timeout: Datenbank hat nach 8 Sekunden nicht geantwortet.");
+zeigeDatenbankFehler();
+}, 8000);
+try {
+const { data: bData, error: bErr } = await _supabase.from('buchungen').select('*');
+if (bErr) throw new Error("Supabase Fehler: Buchungen konnten nicht geladen werden.");
+if (bData) buchungen = bData;
 
-            let startM = ansichtModus === 'monat' ? aktuellerMonat : 0; let endM = ansichtModus === 'monat' ? aktuellerMonat : 11;
+const { data: aData, error: aErr } = await _supabase.from('anfragen').select('*');
+if (aErr) throw new Error("Supabase Fehler: Anfragen konnten nicht geladen werden.");
+if (aData) anfragen = aData;
 
-            let thEcke = document.createElement("th"); thEcke.className = "sticky-col"; thEcke.innerText = ansichtModus === 'monat' ? "Objekt/Tag" : "Jahr " + aktuellesJahr;
-            if(ansichtModus === 'jahr') thEcke.rowSpan = 2; else kopfTage.appendChild(thEcke);
-            if(ansichtModus === 'jahr') kopfMonate.appendChild(thEcke);
+clearTimeout(timeoutTimer);
+kalenderRendern();
+if(istAdmin) listenRendern();
+} catch (err) {
+clearTimeout(timeoutTimer);
+console.error(err.message);
+zeigeDatenbankFehler();
+}
+}
+datenInitialLaden();
 
-            const wochentageKurz = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+// Hilfsfunktionen
+async function sha256(message) {
+const msgBuffer = new TextEncoder().encode(message);
+const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+function berechneNaechte(startStr, endStr) { return Math.ceil(Math.abs(new Date(endStr) - new Date(startStr)) / (1000 * 60 * 60 * 24)); }
+function formatDatum(datumStr) { return datumStr.split('-').reverse().join('.'); }
+function pruefeUeberlappung(wId, neuStart, neuEnd, ignoreId = null) { return buchungen.some(b => b.wohnungId === parseInt(wId) && b.id !== ignoreId && neuStart < b.endDatum && neuEnd > b.startDatum); }
+function getZeitstempel() { let j = new Date(); return `${j.getDate()}.${j.getMonth()+1}.${j.getFullYear()} - ${String(j.getHours()).padStart(2,'0')}:${String(j.getMinutes()).padStart(2,'0')}`; }
 
-            for (let m = startM; m <= endM; m++) {
-                const tageImMonat = new Date(aktuellesJahr, m + 1, 0).getDate();
-                if(ansichtModus === 'jahr') { let thM = document.createElement("th"); thM.colSpan = tageImMonat; thM.innerText = monatsNamen[m]; kopfMonate.appendChild(thM); }
-                
-                for (let tag = 1; tag <= tageImMonat; tag++) { 
-                    let th = document.createElement("th"); 
-                    let datum = new Date(aktuellesJahr, m, tag);
-                    let wochentag = wochentageKurz[datum.getDay()];
-                    
-                    th.innerHTML = `${tag}<br><span style="font-size: 10px; font-weight: normal; opacity: 0.9;">${wochentag}</span>`; 
-                    kopfTage.appendChild(th); 
-                }
-            }
+function zeigeDatenbankFehler() {
+document.getElementById("dbErrorOverlay").style.display = "flex";
+document.body.style.overflow = "hidden";
+let syncStatus = document.getElementById("syncStatus");
+if(syncStatus) {
+syncStatus.className = "status-badge status-red";
+syncStatus.innerHTML = "🔴 Verbindung gestört";
+}
+}
 
-            wohnungen.forEach((wohnungName, wIndex) => {
-                let tr = document.createElement("tr"); let tdName = document.createElement("td"); tdName.className = "wohnung-name sticky-col"; tdName.innerText = wohnungName; tr.appendChild(tdName);
+// Login / Logout
+async function login() {
+let pwd = prompt("Bitte Admin-Passwort eingeben:");
+if (!pwd) return;
+if (await sha256(pwd) === ADMIN_PASSWORT_HASH) {
+istAdmin = true; document.body.className = "mode-admin"; klickAuswahl.aktiv = false;
+kalenderRendern(); listenRendern();
+} else { alert("Falsches Passwort!"); }
+}
+function logout() { istAdmin = false; document.body.className = "mode-gast"; klickAuswahl.aktiv = false; kalenderRendern(); }
 
-                for (let m = startM; m <= endM; m++) {
-                    const tageImMonat = new Date(aktuellesJahr, m + 1, 0).getDate();
-                    for (let tag = 1; tag <= tageImMonat; tag++) {
-                        let tdTag = document.createElement("td");
-                        let tagString = `${aktuellesJahr}-${String(m + 1).padStart(2, '0')}-${String(tag).padStart(2, '0')}`;
-                        let tagesBuchungen = buchungen.filter(b => b.wohnungId === wIndex && tagString >= b.startDatum && tagString <= b.endDatum);
+function erstelleBackup(aktionText) {
+backupHistorie.unshift({ zeit: getZeitstempel(), aktion: aktionText, daten: JSON.stringify({ buchungen: buchungen, anfragen: anfragen }) });
+if (backupHistorie.length > 15) backupHistorie = backupHistorie.slice(0, 15);
+localStorage.setItem("ferienHistorie", JSON.stringify(backupHistorie));
+}
+function openHistoryModal() {
+const listDiv = document.getElementById("historyList"); listDiv.innerHTML = "";
+if (backupHistorie.length === 0) listDiv.innerHTML = "<div style='padding: 15px;'>Keine Backups.</div>";
+else {
+backupHistorie.forEach((backup, index) => {
+let info = JSON.parse(backup.daten);
+listDiv.innerHTML += `<div class="history-item">
+<div><strong>${backup.zeit}</strong><br><span style="font-size: 12px; color: #7f8c8d;">${backup.aktion} (${info.buchungen.length} Buchungen)</span></div>
+</div>`;
+});
+}
+document.getElementById("historyModal").style.display = "flex";
+}
+function closeHistoryModal() { document.getElementById("historyModal").style.display = "none"; }
 
-                        if (tagesBuchungen.length === 0) {
-                            tdTag.className = "frei"; tdTag.onclick = (e) => zelleKlick(wIndex, tagString, e.target);
-                        } else {
-                            tdTag.className = "belegt farbe-w" + wIndex; 
-                            let isCheckOut = tagesBuchungen.some(b => b.endDatum === tagString); let isCheckIn = tagesBuchungen.some(b => b.startDatum === tagString);
-                            let isMiddle = tagesBuchungen.some(b => b.startDatum < tagString && b.endDatum > tagString); let isWechsel = tagesBuchungen.length >= 2 && isCheckOut && isCheckIn;
+// Popups & Formulare
+function openModal(wIndex, start, end) {
+document.getElementById("modalTitle").innerText = istAdmin ? "Neue Buchung" : "Buchungsanfrage";
+document.getElementById("modalStart").value = start; document.getElementById("modalEnd").value = end;
+let cbContainer = document.getElementById("modalApartmentCheckboxes"); cbContainer.innerHTML = "";
+wohnungen.forEach((wName, index) => {
+let isChecked = (index === wIndex) ? "checked" : "";
+cbContainer.innerHTML += `<label><input type="checkbox" class="multi-wohnung-cb" value="${index}" ${isChecked}> ${wName}</label>`;
+});
+updateModalDetails(); 
+document.getElementById("modalName").value = ""; 
+document.getElementById("modalKontakt").value = "";
+document.getElementById("modalErsteller").value = ""; // Neues Feld zurücksetzen
+document.getElementById("bookingModal").style.display = "flex";
+}
 
-                            if (isWechsel) { tdTag.classList.add("wechseltag"); tdTag.innerText = "⇄"; } 
-                            else if (isMiddle) { tdTag.classList.add("voll-belegt"); tdTag.innerText = "X"; } 
-                            else if (isCheckOut) { tdTag.classList.add("halb-out"); tdTag.innerText = "◁"; } 
-                            else if (isCheckIn) { tdTag.classList.add("halb-in"); tdTag.innerText = "▷"; }
+function updateModalDetails() {
+let start = document.getElementById("modalStart").value; let end = document.getElementById("modalEnd").value;
+let infoDiv = document.getElementById("modalNightsInfo");
+if(start && end && start < end) { infoDiv.innerHTML = `${berechneNaechte(start, end)} Nächte`; infoDiv.style.color = "#333"; }
+else { infoDiv.innerHTML = `Datum prüfen!`; infoDiv.style.color = "red"; }
+}
+function closeModal() { document.getElementById("bookingModal").style.display = "none"; klickAuswahl.aktiv = false; kalenderRendern(); }
 
-                            if (istAdmin) {
-                                tdTag.onclick = () => {
-                                    if(tagesBuchungen.length === 1) { openEditModal(tagesBuchungen[0].id); } 
-                                    else {
-                                        let wahl = prompt(`Wechseltag:\n1: Abreise ${tagesBuchungen[0].gast}\n2: Anreise ${tagesBuchungen[1].gast}\nBitte "1" oder "2" tippen:`);
-                                        if (wahl === "1") openEditModal(tagesBuchungen[0].id); if (wahl === "2") openEditModal(tagesBuchungen[1].id);
-                                    }
-                                };
-                            } else {
-                                if (tagesBuchungen.length === 1 && (isCheckOut || isCheckIn) && !isMiddle) { tdTag.onclick = (e) => zelleKlick(wIndex, tagString, e.target); }
-                            }
+async function submitModal() {
+let start = document.getElementById("modalStart").value; let end = document.getElementById("modalEnd").value;
+let gastName = document.getElementById("modalName").value.trim(); let kontakt = document.getElementById("modalKontakt").value.trim();
+let ersteller = document.getElementById("modalErsteller").value.trim(); // Ersteller Feld
 
-                            let hoverText = istAdmin ? tagesBuchungen.map(b => `${b.gast} | ${formatDatum(b.startDatum)} - ${formatDatum(b.endDatum)}`).join('\n---\n') : (isWechsel ? "Wechseltag" : "Belegt");
-                            tdTag.setAttribute("data-info", hoverText);
-                        }
+if (!start || !end || start >= end) { alert("Bitte prüfe das Datum."); return; }
+if (gastName === "") { alert("Name fehlt."); return; }
+if (!istAdmin && kontakt === "") { alert("Kontakt fehlt."); return; }
 
-                        if(klickAuswahl.aktiv && klickAuswahl.wohnungId === wIndex && klickAuswahl.startDatum === tagString) tdTag.classList.add("klick-start");
-                        tr.appendChild(tdTag);
-                    }
-                }
-                body.appendChild(tr);
-            });
+let ausgewaehlteCbs = document.querySelectorAll(".multi-wohnung-cb:checked");
+if (ausgewaehlteCbs.length === 0) { alert("Bitte Objekt wählen."); return; }
 
-            kopfMonate.style.display = ansichtModus === 'monat' ? 'none' : 'table-row';
-            if(istAdmin) { filterJahreAktualisieren(); listenRendern(); }
-        }
-        
-        function zelleKlick(wIndex, datumStr, tdElement) {
-            if (!klickAuswahl.aktiv) { klickAuswahl = { aktiv: true, wohnungId: wIndex, startDatum: datumStr, tdElement: tdElement }; kalenderRendern(); } 
-            else {
-                if(klickAuswahl.startDatum === datumStr && klickAuswahl.wohnungId === wIndex) { klickAuswahl.aktiv = false; kalenderRendern(); return; }
-                if(klickAuswahl.wohnungId !== wIndex) { alert("Bitte in derselben Wohnung auswählen!"); klickAuswahl.aktiv = false; kalenderRendern(); return; }
-                let start = klickAuswahl.startDatum; let end = datumStr;
-                if(start > end) { start = datumStr; end = klickAuswahl.startDatum; }
-                openModal(wIndex, start, end);
-            }
-        }
+let wohnungsIds = Array.from(ausgewaehlteCbs).map(cb => parseInt(cb.value));
+for (let wId of wohnungsIds) { if (pruefeUeberlappung(wId, start, end)) { alert(`"${wohnungen[wId]}" ist belegt!`); return; } }
 
-        // Listenverwaltung
-        async function anfrageAkzeptieren(id) {
-            let anfrage = anfragen.find(a => a.id === id);
-            if(anfrage) {
-                if(pruefeUeberlappung(anfrage.wohnungId, anfrage.startDatum, anfrage.endDatum)) { alert("Zeitraum belegt!"); return; }
-                
-                try {
-                    await _supabase.from('anfragen').delete().eq('id', id);
-                    await _supabase.from('buchungen').insert([anfrage]);
-                    
-                    buchungen.push(anfrage); 
-                    anfragen = anfragen.filter(a => a.id !== id);
-                    erstelleBackup("Akzeptiert: " + anfrage.gast); kalenderRendern(); listenRendern();
-                } catch (error) {
-                    console.error(error);
-                    zeigeDatenbankFehler();
-                }
-            }
-        }
-        
-        async function anfrageAblehnen(id) { 
-            if(confirm("Anfrage löschen?")) { 
-                let geloescht = anfragen.filter(a => a.id === id);
-                anfragen = anfragen.filter(a => a.id !== id); 
-                try {
-                    await _supabase.from('anfragen').delete().eq('id', id);
-                    erstelleBackup("Anfrage gelöscht"); listenRendern(); 
-                } catch (error) {
-                    console.error(error);
-                    anfragen.push(...geloescht);
-                    zeigeDatenbankFehler();
-                }
-            } 
-        }
-        
-        function filterJahreAktualisieren() {
-            let jahre = new Set([aktuellesJahr.toString()]); buchungen.forEach(b => { jahre.add(b.startDatum.substring(0,4)); jahre.add(b.endDatum.substring(0,4)); });
-            let select = document.getElementById("filterJahr"); let aktuelleAuswahl = select.value || aktuellesJahr.toString(); select.innerHTML = '<option value="alle">Alle</option>';
-            Array.from(jahre).sort().forEach(jahr => { let option = document.createElement("option"); option.value = jahr; option.text = jahr; if(jahr === aktuelleAuswahl) option.selected = true; select.appendChild(option); });
-        }
-        
-        function listenRendern() {
-            if(!istAdmin) return;
-            const anfragenBody = document.getElementById("anfragenBody"); anfragenBody.innerHTML = "";
-            if (anfragen.length === 0) { anfragenBody.innerHTML = "<tr><td colspan='6' style='color:#7f8c8d; padding:15px;'>Keine offenen Anfragen.</td></tr>"; } 
-            else {
-                anfragen.forEach(a => {
-                    anfragenBody.innerHTML += `<tr><td><strong>${wohnungen[a.wohnungId]}</strong></td><td>${a.gast}</td><td>${a.kontakt||'-'}</td>
-                        <td>${formatDatum(a.startDatum)}</td><td>${formatDatum(a.endDatum)}</td>
-                        <td><button class="btn btn-accept" onclick="anfrageAkzeptieren('${a.id}')">&#10004;</button> <button class="btn delete-btn" onclick="anfrageAblehnen('${a.id}')">&#10008;</button></td></tr>`;
-                });
-            }
-            const listenBody = document.getElementById("listenBody"); listenBody.innerHTML = "";
-            let filterJahr = document.getElementById("filterJahr").value;
-            let sortierte = [...buchungen].sort((a, b) => a.startDatum.localeCompare(b.startDatum));
-            sortierte.forEach(b => {
-                if(filterJahr !== "alle" && !b.startDatum.startsWith(filterJahr) && !b.endDatum.startsWith(filterJahr)) return;
-                listenBody.innerHTML += `<tr><td><strong>${wohnungen[b.wohnungId]}</strong></td><td>${b.gast}</td><td>${b.kontakt||'-'}</td>
-                    <td>${formatDatum(b.startDatum)}</td><td>${formatDatum(b.endDatum)}</td>
-                    <td><button class="btn" style="background-color:#f39c12; font-size:12px; padding:8px 10px;" onclick="openEditModal('${b.id}')">Ändern</button></td></tr>`;
-            });
-            if(listenBody.innerHTML === "") listenBody.innerHTML = "<tr><td colspan='6' style='padding:15px;'>Keine Buchungen.</td></tr>";
-        }
+let neueEintraege = wohnungsIds.map(wId => {
+return { id: Math.random().toString(36).substr(2, 9), wohnungId: wId, startDatum: start, endDatum: end, gast: gastName, kontakt: kontakt || "-", ersteller: ersteller || "Unbekannt" };
+});
 
-        // --- CSV EXPORT FUNKTION ---
-        function exportiereDatenCSV() {
-            if (buchungen.length === 0 && anfragen.length === 0) {
-                alert("Keine Daten zum Exportieren vorhanden.");
-                return;
-            }
-            let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; 
-            csvContent += "Kategorie,ID,Objekt,Startdatum,Enddatum,Gast,Kontakt\n";
-            const escapeCSV = (text) => `"${String(text).replace(/"/g, '""')}"`;
-            
-            buchungen.forEach(b => {
-                let objektName = wohnungen[b.wohnungId] || "Unbekannt";
-                csvContent += `Buchung,${b.id},${escapeCSV(objektName)},${formatDatum(b.startDatum)},${formatDatum(b.endDatum)},${escapeCSV(b.gast)},${escapeCSV(b.kontakt)}\n`;
-            });
-            
-            anfragen.forEach(a => {
-                let objektName = wohnungen[a.wohnungId] || "Unbekannt";
-                csvContent += `Anfrage,${a.id},${escapeCSV(objektName)},${formatDatum(a.startDatum)},${formatDatum(a.endDatum)},${escapeCSV(a.gast)},${escapeCSV(a.kontakt)}\n`;
-            });
-            
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            let heute = new Date().toISOString().split('T')[0];
-            link.setAttribute("download", `Belegungsplan_Backup_${heute}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
+try {
+if (istAdmin) {
+buchungen.push(...neueEintraege);
+const { error } = await _supabase.from('buchungen').insert(neueEintraege);
+if (error) throw error;
+erstelleBackup("Neue Buchung: " + gastName);
+kalenderRendern(); listenRendern();
+} else {
+anfragen.push(...neueEintraege);
+const { error } = await _supabase.from('anfragen').insert(neueEintraege);
+if (error) throw error;
+erstelleBackup("Neue Anfrage: " + gastName);
+alert("Anfrage gesendet!");
+}
+closeModal();
+} catch (error) {
+console.error(error);
+zeigeDatenbankFehler();
+}
+}
 
-        // --- CSV IMPORT (LADEN) FUNKTIONEN ---
-        function importiereDatenCSV() {
-            if (confirm("ACHTUNG: Beim Laden werden alle aktuellen Buchungen und Anfragen überschrieben! Fortfahren?")) {
-                document.getElementById('csvFileInput').click(); 
-            }
-        }
-        
-        async function verarbeiteCSVImport(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                const text = e.target.result;
-                const lines = text.split('\n');
-                
-                let neueBuchungen = [];
-                let neueAnfragen = [];
-                
-                for (let i = 1; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue;
-                    
-                    const values = [];
-                    let insideQuote = false;
-                    let currentValue = "";
-                    for (let char of line) {
-                        if (char === '"') {
-                            insideQuote = !insideQuote;
-                        } else if (char === ',' && !insideQuote) {
-                            values.push(currentValue);
-                            currentValue = "";
-                        } else {
-                            currentValue += char;
-                        }
-                    }
-                    values.push(currentValue);
-                    
-                    if (values.length >= 7) {
-                        const kategorie = values[0];
-                        const id = values[1];
-                        const objekt = values[2];
-                        const startDatumDDMMYYYY = values[3];
-                        const endDatumDDMMYYYY = values[4];
-                        const gast = values[5];
-                        const kontakt = values[6];
-                        const wohnungId = wohnungen.indexOf(objekt);
-                        if (wohnungId === -1) continue;
-                        
-                        const startParts = startDatumDDMMYYYY.split('.');
-                        const endParts = endDatumDDMMYYYY.split('.');
-                        if(startParts.length !== 3 || endParts.length !== 3) continue;
-                        const startDatum = `${startParts[2]}-${startParts[1]}-${startParts[0]}`;
-                        const endDatum = `${endParts[2]}-${endParts[1]}-${endParts[0]}`;
-                        
-                        const eintrag = {
-                            id: id || Math.random().toString(36).substr(2, 9),
-                            wohnungId: parseInt(wohnungId),
-                            startDatum: startDatum,
-                            endDatum: endDatum,
-                            gast: gast,
-                            kontakt: kontakt || "-"
-                        };
-                        
-                        if (kategorie === 'Buchung') {
-                            neueBuchungen.push(eintrag);
-                        } else if (kategorie === 'Anfrage') {
-                            neueAnfragen.push(eintrag);
-                        }
-                    }
-                }
-                
-                try {
-                    await _supabase.from('buchungen').delete().neq('id', 'LADE_CSV_DELETE_ALL');
-                    await _supabase.from('anfragen').delete().neq('id', 'LADE_CSV_DELETE_ALL');
-                    
-                    if (neueBuchungen.length > 0) await _supabase.from('buchungen').insert(neueBuchungen);
-                    if (neueAnfragen.length > 0) await _supabase.from('anfragen').insert(neueAnfragen);
-                    
-                    buchungen = neueBuchungen;
-                    anfragen = neueAnfragen;
-                    kalenderRendern();
-                    if (istAdmin) listenRendern();
-                    alert("Daten wurden erfolgreich wiederhergestellt!");
-                } catch(error) {
-                    console.error(error);
-                    zeigeDatenbankFehler();
-                }
-                document.getElementById('csvFileInput').value = ""; 
-            };
-            reader.readAsText(file);
-        }
-    </script>
+// Edit Popups
+function openEditModal(id) {
+let buchung = buchungen.find(b => b.id === id); if(!buchung) return;
+editingBuchungId = id; 
+document.getElementById("editWohnung").value = buchung.wohnungId; document.getElementById("editStart").value = buchung.startDatum;
+document.getElementById("editEnd").value = buchung.endDatum; document.getElementById("editName").value = buchung.gast; 
+document.getElementById("editKontakt").value = buchung.kontakt;
+document.getElementById("editErsteller").value = buchung.ersteller || ""; // Ersteller laden
+document.getElementById("editModal").style.display = "flex";
+}
+function closeEditModal() { document.getElementById("editModal").style.display = "none"; editingBuchungId = null; }
+
+async function saveEditModal() {
+let wId = document.getElementById("editWohnung").value; let start = document.getElementById("editStart").value; let end = document.getElementById("editEnd").value;
+let name = document.getElementById("editName").value.trim(); let kontakt = document.getElementById("editKontakt").value.trim();
+let ersteller = document.getElementById("editErsteller").value.trim(); // Ersteller Feld
+
+if (!start || !end || start >= end) { alert("Datum prüfen!"); return; }
+if (name === "") { alert("Name fehlt."); return; }
+if (pruefeUeberlappung(wId, start, end, editingBuchungId)) { alert("Überschneidung!"); return; }
+
+let index = buchungen.findIndex(b => b.id === editingBuchungId);
+if(index !== -1) {
+let alteWerte = { ...buchungen[index] };
+buchungen[index].wohnungId = parseInt(wId); buchungen[index].startDatum = start; buchungen[index].endDatum = end;
+buchungen[index].gast = name; buchungen[index].kontakt = kontakt || "-";
+buchungen[index].ersteller = ersteller || "Unbekannt"; // Speichern im Array
+
+try {
+const { error } = await _supabase.from('buchungen').update({
+wohnungId: parseInt(wId), startDatum: start, endDatum: end, gast: name, kontakt: kontakt || "-", ersteller: ersteller || "Unbekannt"
+}).eq('id', editingBuchungId);
+if (error) throw error;
+erstelleBackup("Bearbeitet: " + name); kalenderRendern(); listenRendern(); closeEditModal();
+} catch (error) {
+console.error(error);
+buchungen[index] = alteWerte;
+zeigeDatenbankFehler();
+}
+}
+}
+
+async function deleteFromEditModal() {
+let b = buchungen.find(x => x.id === editingBuchungId);
+if(confirm("Wirklich löschen?")) {
+let geloescht = buchungen.filter(x => x.id === editingBuchungId);
+buchungen = buchungen.filter(x => x.id !== editingBuchungId);
+try {
+const { error } = await _supabase.from('buchungen').delete().eq('id', editingBuchungId);
+if (error) throw error;
+erstelleBackup("Gelöscht: " + (b?b.gast:"")); kalenderRendern(); listenRendern(); closeEditModal();
+} catch (error) {
+console.error(error);
+buchungen.push(...geloescht);
+zeigeDatenbankFehler();
+}
+}
+}
+
+// Kalender Rendern & Navigation
+function ansichtWechseln() { ansichtModus = ansichtModus === 'monat' ? 'jahr' : 'monat'; document.getElementById("ansichtText").innerText = ansichtModus === 'monat' ? 'Monat' : 'Jahr'; klickAuswahl.aktiv = false; kalenderRendern(); }
+function direktDatumAuswahl() { aktuellerMonat = parseInt(document.getElementById("monatSelect").value); aktuellesJahr = parseInt(document.getElementById("jahrSelect").value); if(ansichtModus === 'jahr') { ansichtModus = 'monat'; document.getElementById("ansichtText").innerText = 'Monat'; } klickAuswahl.aktiv = false; kalenderRendern(); }
+function zeitAendern(verschiebung) { klickAuswahl.aktiv = false; if (ansichtModus === 'monat') { aktuellerMonat += verschiebung; if (aktuellerMonat > 11) { aktuellerMonat = 0; aktuellesJahr++; } else if (aktuellerMonat < 0) { aktuellerMonat = 11; aktuellesJahr--; } } else { aktuellesJahr += verschiebung; } kalenderRendern(); }
+
+function kalenderRendern() {
+document.getElementById("kalenderTabelle").className = ansichtModus === 'monat' ? 'ansicht-monat' : 'ansicht-jahr';
+document.getElementById("monatSelect").value = aktuellerMonat; document.getElementById("jahrSelect").value = aktuellesJahr;
+document.getElementById("monatSelect").style.display = (ansichtModus === 'jahr') ? 'none' : 'block';
+
+const kopfMonate = document.getElementById("tageKopfMonate"); const kopfTage = document.getElementById("tageKopfTage"); const body = document.getElementById("kalenderBody");
+kopfMonate.innerHTML = ""; kopfTage.innerHTML = ""; body.innerHTML = "";
+
+let startM = ansichtModus === 'monat' ? aktuellerMonat : 0; let endM = ansichtModus === 'monat' ? aktuellerMonat : 11;
+let thEcke = document.createElement("th"); thEcke.className = "sticky-col"; thEcke.innerText = ansichtModus === 'monat' ? "Objekt/Tag" : "Jahr " + aktuellesJahr;
+if(ansichtModus === 'jahr') thEcke.rowSpan = 2; else kopfTage.appendChild(thEcke);
+if(ansichtModus === 'jahr') kopfMonate.appendChild(thEcke);
+
+const wochentageKurz = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+for (let m = startM; m <= endM; m++) {
+const tageImMonat = new Date(aktuellesJahr, m + 1, 0).getDate();
+if(ansichtModus === 'jahr') { let thM = document.createElement("th"); thM.colSpan = tageImMonat; thM.innerText = monatsNamen[m]; kopfMonate.appendChild(thM); }
+for (let tag = 1; tag <= tageImMonat; tag++) {
+let th = document.createElement("th");
+let datum = new Date(aktuellesJahr, m, tag);
+let wochentag = wochentageKurz[datum.getDay()];
+th.innerHTML = `${tag}<br><span style="font-size: 10px; font-weight: normal; opacity: 0.9;">${wochentag}</span>`;
+kopfTage.appendChild(th);
+}
+}
+
+wohnungen.forEach((wohnungName, wIndex) => {
+let tr = document.createElement("tr"); let tdName = document.createElement("td"); tdName.className = "wohnung-name sticky-col"; tdName.innerText = wohnungName; tr.appendChild(tdName);
+for (let m = startM; m <= endM; m++) {
+const tageImMonat = new Date(aktuellesJahr, m + 1, 0).getDate();
+for (let tag = 1; tag <= tageImMonat; tag++) {
+let tdTag = document.createElement("td");
+let tagString = `${aktuellesJahr}-${String(m + 1).padStart(2, '0')}-${String(tag).padStart(2, '0')}`;
+let tagesBuchungen = buchungen.filter(b => b.wohnungId === wIndex && tagString >= b.startDatum && tagString <= b.endDatum);
+
+if (tagesBuchungen.length === 0) {
+tdTag.className = "frei"; tdTag.onclick = (e) => zelleKlick(wIndex, tagString, e.target);
+} else {
+tdTag.className = "belegt farbe-w" + wIndex;
+let isCheckOut = tagesBuchungen.some(b => b.endDatum === tagString); let isCheckIn = tagesBuchungen.some(b => b.startDatum === tagString);
+let isMiddle = tagesBuchungen.some(b => b.startDatum < tagString && b.endDatum > tagString); let isWechsel = tagesBuchungen.length >= 2 && isCheckOut && isCheckIn;
+
+if (isWechsel) { tdTag.classList.add("wechseltag"); tdTag.innerText = "⇄"; }
+else if (isMiddle) { tdTag.classList.add("voll-belegt"); tdTag.innerText = "X"; }
+else if (isCheckOut) { tdTag.classList.add("halb-out"); tdTag.innerText = "◁"; }
+else if (isCheckIn) { tdTag.classList.add("halb-in"); tdTag.innerText = "▷"; }
+
+if (istAdmin) {
+tdTag.onclick = () => {
+if(tagesBuchungen.length === 1) { openEditModal(tagesBuchungen[0].id); }
+else {
+let wahl = prompt(`Wechseltag:\n1: Abreise ${tagesBuchungen[0].gast}\n2: Anreise ${tagesBuchungen[1].gast}\nBitte "1" oder "2" tippen:`);
+if (wahl === "1") openEditModal(tagesBuchungen[0].id); if (wahl === "2") openEditModal(tagesBuchungen[1].id);
+}
+};
+} else {
+if (tagesBuchungen.length === 1 && (isCheckOut || isCheckIn) && !isMiddle) { tdTag.onclick = (e) => zelleKlick(wIndex, tagString, e.target); }
+}
+let hoverText = istAdmin ? tagesBuchungen.map(b => `${b.gast} | ${formatDatum(b.startDatum)} - ${formatDatum(b.endDatum)}`).join('\n---\n') : (isWechsel ? "Wechseltag" : "Belegt");
+tdTag.setAttribute("data-info", hoverText);
+}
+if(klickAuswahl.aktiv && klickAuswahl.wohnungId === wIndex && klickAuswahl.startDatum === tagString) tdTag.classList.add("klick-start");
+tr.appendChild(tdTag);
+}
+}
+body.appendChild(tr);
+});
+kopfMonate.style.display = ansichtModus === 'monat' ? 'none' : 'table-row';
+if(istAdmin) { filterJahreAktualisieren(); listenRendern(); }
+}
+
+function zelleKlick(wIndex, datumStr, tdElement) {
+if (!klickAuswahl.aktiv) { klickAuswahl = { aktiv: true, wohnungId: wIndex, startDatum: datumStr, tdElement: tdElement }; kalenderRendern(); }
+else {
+if(klickAuswahl.startDatum === datumStr && klickAuswahl.wohnungId === wIndex) { klickAuswahl.aktiv = false; kalenderRendern(); return; }
+if(klickAuswahl.wohnungId !== wIndex) { alert("Bitte in derselben Wohnung auswählen!"); klickAuswahl.aktiv = false; kalenderRendern(); return; }
+let start = klickAuswahl.startDatum; let end = datumStr;
+if(start > end) { start = datumStr; end = klickAuswahl.startDatum; }
+openModal(wIndex, start, end);
+}
+}
+
+// Listenverwaltung
+async function anfrageAkzeptieren(id) {
+let anfrage = anfragen.find(a => a.id === id);
+if(anfrage) {
+if(pruefeUeberlappung(anfrage.wohnungId, anfrage.startDatum, anfrage.endDatum)) { alert("Zeitraum belegt!"); return; }
+try {
+await _supabase.from('anfragen').delete().eq('id', id);
+await _supabase.from('buchungen').insert([anfrage]);
+buchungen.push(anfrage);
+anfragen = anfragen.filter(a => a.id !== id);
+erstelleBackup("Akzeptiert: " + anfrage.gast); kalenderRendern(); listenRendern();
+} catch (error) {
+console.error(error);
+zeigeDatenbankFehler();
+}
+}
+}
+
+async function anfrageAblehnen(id) {
+if(confirm("Anfrage löschen?")) {
+let geloescht = anfragen.filter(a => a.id === id);
+anfragen = anfragen.filter(a => a.id !== id);
+try {
+await _supabase.from('anfragen').delete().eq('id', id);
+erstelleBackup("Anfrage gelöscht"); listenRendern();
+} catch (error) {
+console.error(error);
+anfragen.push(...geloescht);
+zeigeDatenbankFehler();
+}
+}
+}
+
+function filterJahreAktualisieren() {
+let jahre = new Set([aktuellesJahr.toString()]); buchungen.forEach(b => { jahre.add(b.startDatum.substring(0,4)); jahre.add(b.endDatum.substring(0,4)); });
+let select = document.getElementById("filterJahr"); let aktuelleAuswahl = select.value || aktuellesJahr.toString(); select.innerHTML = '<option value="alle">Alle</option>';
+Array.from(jahre).sort().forEach(jahr => { let option = document.createElement("option"); option.value = jahr; option.text = jahr; if(jahr === aktuelleAuswahl) option.selected = true; select.appendChild(option); });
+}
+
+function listenRendern() {
+if(!istAdmin) return;
+const anfragenBody = document.getElementById("anfragenBody"); anfragenBody.innerHTML = "";
+if (anfragen.length === 0) { anfragenBody.innerHTML = "<tr><td colspan='7' style='color:#7f8c8d; padding:15px;'>Keine offenen Anfragen.</td></tr>"; }
+else {
+anfragen.forEach(a => {
+anfragenBody.innerHTML += `<tr><td><strong>${wohnungen[a.wohnungId]}</strong></td><td>${a.gast}</td><td>${a.kontakt||'-'}</td><td>${a.ersteller||'-'}</td>
+<td>${formatDatum(a.startDatum)}</td><td>${formatDatum(a.endDatum)}</td>
+<td><button class="btn btn-accept" onclick="anfrageAkzeptieren('${a.id}')">&#10004;</button> <button class="btn delete-btn" onclick="anfrageAblehnen('${a.id}')">&#10008;</button></td></tr>`;
+});
+}
+
+const listenBody = document.getElementById("listenBody"); listenBody.innerHTML = "";
+let filterJahr = document.getElementById("filterJahr").value;
+let sortierte = [...buchungen].sort((a, b) => a.startDatum.localeCompare(b.startDatum));
+
+sortierte.forEach(b => {
+if(filterJahr !== "alle" && !b.startDatum.startsWith(filterJahr) && !b.endDatum.startsWith(filterJahr)) return;
+listenBody.innerHTML += `<tr><td><strong>${wohnungen[b.wohnungId]}</strong></td><td>${b.gast}</td><td>${b.kontakt||'-'}</td><td>${b.ersteller||'-'}</td>
+<td>${formatDatum(b.startDatum)}</td><td>${formatDatum(b.endDatum)}</td>
+<td><button class="btn" style="background-color:#f39c12; font-size:12px; padding:8px 10px;" onclick="openEditModal('${b.id}')">Ändern</button></td></tr>`;
+});
+if(listenBody.innerHTML === "") listenBody.innerHTML = "<tr><td colspan='7' style='padding:15px;'>Keine Buchungen.</td></tr>";
+}
+
+// --- CSV EXPORT FUNKTION ---
+function exportiereDatenCSV() {
+if (buchungen.length === 0 && anfragen.length === 0) {
+alert("Keine Daten zum Exportieren vorhanden.");
+return;
+}
+let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+csvContent += "Kategorie,ID,Objekt,Startdatum,Enddatum,Gast,Kontakt,Ersteller\n";
+const escapeCSV = (text) => `"${String(text).replace(/"/g, '""')}"`;
+
+buchungen.forEach(b => {
+let objektName = wohnungen[b.wohnungId] || "Unbekannt";
+csvContent += `Buchung,${b.id},${escapeCSV(objektName)},${formatDatum(b.startDatum)},${formatDatum(b.endDatum)},${escapeCSV(b.gast)},${escapeCSV(b.kontakt)},${escapeCSV(b.ersteller||"")}\n`;
+});
+anfragen.forEach(a => {
+let objektName = wohnungen[a.wohnungId] || "Unbekannt";
+csvContent += `Anfrage,${a.id},${escapeCSV(objektName)},${formatDatum(a.startDatum)},${formatDatum(a.endDatum)},${escapeCSV(a.gast)},${escapeCSV(a.kontakt)},${escapeCSV(a.ersteller||"")}\n`;
+});
+const encodedUri = encodeURI(csvContent);
+const link = document.createElement("a");
+link.setAttribute("href", encodedUri);
+let heute = new Date().toISOString().split('T')[0];
+link.setAttribute("download", `Belegungsplan_Backup_${heute}.csv`);
+document.body.appendChild(link);
+link.click();
+document.body.removeChild(link);
+}
+
+// --- CSV IMPORT (LADEN) FUNKTIONEN ---
+function importiereDatenCSV() {
+if (confirm("ACHTUNG: Beim Laden werden alle aktuellen Buchungen und Anfragen überschrieben! Fortfahren?")) {
+document.getElementById('csvFileInput').click();
+}
+}
+async function verarbeiteCSVImport(event) {
+const file = event.target.files[0];
+if (!file) return;
+const reader = new FileReader();
+reader.onload = async function(e) {
+const text = e.target.result;
+const lines = text.split('\n');
+let neueBuchungen = [];
+let neueAnfragen = [];
+
+for (let i = 1; i < lines.length; i++) {
+const line = lines[i].trim();
+if (!line) continue;
+const values = [];
+let insideQuote = false;
+let currentValue = "";
+
+for (let char of line) {
+if (char === '"') { insideQuote = !insideQuote; } 
+else if (char === ',' && !insideQuote) { values.push(currentValue); currentValue = ""; } 
+else { currentValue += char; }
+}
+values.push(currentValue);
+
+if (values.length >= 7) {
+const kategorie = values[0];
+const id = values[1];
+const objekt = values[2];
+const startDatumDDMMYYYY = values[3];
+const endDatumDDMMYYYY = values[4];
+const gast = values[5];
+const kontakt = values[6];
+const ersteller = values[7] || ""; // Neues CSV Feld
+
+const wohnungId = wohnungen.indexOf(objekt);
+if (wohnungId === -1) continue;
+
+const startParts = startDatumDDMMYYYY.split('.');
+const endParts = endDatumDDMMYYYY.split('.');
+if(startParts.length !== 3 || endParts.length !== 3) continue;
+
+const startDatum = `${startParts[2]}-${startParts[1]}-${startParts[0]}`;
+const endDatum = `${endParts[2]}-${endParts[1]}-${endParts[0]}`;
+
+const eintrag = {
+id: id || Math.random().toString(36).substr(2, 9),
+wohnungId: parseInt(wohnungId),
+startDatum: startDatum,
+endDatum: endDatum,
+gast: gast,
+kontakt: kontakt || "-",
+ersteller: ersteller
+};
+
+if (kategorie === 'Buchung') { neueBuchungen.push(eintrag); } 
+else if (kategorie === 'Anfrage') { neueAnfragen.push(eintrag); }
+}
+}
+try {
+await _supabase.from('buchungen').delete().neq('id', 'LADE_CSV_DELETE_ALL');
+await _supabase.from('anfragen').delete().neq('id', 'LADE_CSV_DELETE_ALL');
+if (neueBuchungen.length > 0) await _supabase.from('buchungen').insert(neueBuchungen);
+if (neueAnfragen.length > 0) await _supabase.from('anfragen').insert(neueAnfragen);
+buchungen = neueBuchungen;
+anfragen = neueAnfragen;
+kalenderRendern();
+if (istAdmin) listenRendern();
+alert("Daten wurden erfolgreich wiederhergestellt!");
+} catch(error) {
+console.error(error);
+zeigeDatenbankFehler();
+}
+document.getElementById('csvFileInput').value = "";
+};
+reader.readAsText(file);
+}
+</script>
 </body>
 </html>
