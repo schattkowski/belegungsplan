@@ -10,8 +10,12 @@
 /* --- GRUND-LAYOUT --- */
 body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f7f6; color: #333; }
 h1, h2, h3, h4 { color: #2c3e50; margin-top: 0; }
-body.mode-gast .admin-only { display: none !important; }
-body.mode-admin .gast-only { display: none !important; }
+
+/* Sichtbarkeits-Klassen für die 3 Modi (Gast, Freund, Admin) */
+body.mode-gast .admin-only, body.mode-gast .freund-only, body.mode-gast .hide-gast { display: none !important; }
+body.mode-admin .gast-only, body.mode-admin .freund-only { display: none !important; }
+body.mode-freund .gast-only, body.mode-freund .admin-only { display: none !important; }
+
 .box-container { background: white; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
 /* Flexboxen für die Anordnung */
 .header-controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
@@ -50,7 +54,7 @@ th.sticky-col { z-index: 30; background-color: #1a252f; border-right: 2px solid 
 .frei:hover { background-color: #e8f4f8; }
 .klick-start { background-color: #f1c40f !important; color: black !important; font-weight: bold; box-shadow: inset 0 0 5px rgba(0,0,0,0.5); }
 .belegt { font-weight: bold; position: relative; }
-body.mode-admin .belegt { cursor: pointer; }
+body.mode-admin .belegt, body.mode-freund .belegt { cursor: pointer; }
 .farbe-w0 { --bg: #3498db; } .farbe-w1 { --bg: #e67e22; }
 .farbe-w2 { --bg: #9b59b6; } .farbe-w3 { --bg: #27ae60; }
 .farbe-w4 { --bg: #c0392b; }
@@ -67,14 +71,17 @@ white-space: pre; text-align: center; font-size: 12px; z-index: 40; margin-botto
 }
 .listen-tabelle th { background-color: #7f8c8d; position: static; color: white;}
 .modus-banner { text-align: center; padding: 10px; font-weight: bold; margin-bottom: 20px; border-radius: 8px;}
-body.mode-gast .modus-banner { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-body.mode-admin .modus-banner { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+body.mode-gast .modus-banner.gast-only { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+body.mode-admin .modus-banner.admin-only { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+body.mode-freund .modus-banner.freund-only { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+
 /* --- MODALS (POP-UPS) --- */
 .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center; padding: 10px; box-sizing: border-box;}
 .modal-content { background: white; padding: 25px; border-radius: 8px; width: 100%; max-width: 450px; max-height: 90vh; overflow-y: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.3); box-sizing: border-box;}
 .modal-content.wide { max-width: 700px; }
 .modal-content h3 { margin-top: 0; color: #2c3e50; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px;}
 .modal-details { background: #ecf0f1; padding: 15px; border-radius: 4px; font-size: 14px; margin-bottom: 15px; }
+.modal-details p { margin: 5px 0; }
 .checkbox-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
 .checkbox-grid label { display: flex; align-items: center; gap: 8px; cursor: pointer; padding: 5px 0;}
 .checkbox-grid input { width: 18px; height: 18px; margin: 0; }
@@ -104,13 +111,15 @@ body { margin: 10px; }
 
 <div class="header-controls">
 <h1>Belegungsplan</h1>
-<div style="width: 100%; max-width: 300px; margin: 0 auto;">
-<button class="btn btn-login gast-only" onclick="login()">&#128274; Admin Login</button>
-<button class="btn btn-login admin-only" onclick="logout()">&#128275; Logout (Gast-Modus)</button>
+<div style="width: 100%; max-width: 350px; margin: 0 auto; display: flex; gap: 10px;">
+<button class="btn btn-login gast-only" style="flex: 1; background-color: #27ae60;" onclick="loginFreund()">&#128106; Familie & Freunde</button>
+<button class="btn btn-login gast-only" style="flex: 1;" onclick="login()">&#128274; Admin</button>
+<button class="btn btn-login hide-gast" style="width: 100%;" onclick="logout()">&#128275; Logout</button>
 </div>
 </div>
 
 <div class="modus-banner gast-only">Gäste-Ansicht: Klicke auf freie Tage im Kalender, um eine Anfrage zu stellen!</div>
+<div class="modus-banner freund-only">Familie & Freunde-Ansicht: Klicke auf Buchungen, um Details zu sehen.</div>
 <div class="modus-banner admin-only">Admin-Ansicht: Du hast volle Kontrolle. Klicke auf Buchungen zum Bearbeiten.</div>
 
 <!-- DATEISYNCHRONISATION & BACKUPS (Nur Admin) -->
@@ -227,6 +236,21 @@ body { margin: 10px; }
 </div>
 </div>
 
+<!-- POPUP FÜR FAMILIE & FREUNDE (Nur Lesen) -->
+<div class="modal-overlay" id="freundModal">
+<div class="modal-content">
+<h3 style="color: #27ae60;">&#128269; Buchungsdetails</h3>
+<div class="modal-details" style="font-size: 15px; background-color: #f9fbf9; border: 1px solid #d4edda;">
+<p><strong>Objekt:</strong> <span id="fDetailObjekt"></span></p>
+<p><strong>Von:</strong> <span id="fDetailStart"></span></p>
+<p><strong>Bis:</strong> <span id="fDetailEnd"></span></p>
+<p style="margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px;"><strong>Gebucht von:</strong> <span id="fDetailName"></span></p>
+<p><strong>Ersteller:</strong> <span id="fDetailErsteller"></span></p>
+</div>
+<button class="btn" style="background-color: #95a5a6; width: 100%;" onclick="closeFreundModal()">Schließen</button>
+</div>
+</div>
+
 <div class="modal-overlay" id="historyModal">
 <div class="modal-content wide">
 <h3>Historie & Backups (Lokal)</h3>
@@ -254,12 +278,18 @@ Die Website wurde sicherheitshalber gesperrt.
 const supabaseUrl = 'https://dktoaovetyfqvkrmgprf.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRrdG9hb3ZldHlmcXZrcm1ncHJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0NTE1MjIsImV4cCI6MjA5MzAyNzUyMn0.A1OWtEk5MNgEGiSQMsLXFUCKvKTv2PnEEqH2yl4t2bQ';
 const _supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+// Passwörter (als SHA-256 Hash)
 const ADMIN_PASSWORT_HASH = "d0a9ee3129a6d99d4f555a6e03f9536a868b62961ff6f45c3f039c0c05e58f5b";
+const FREUNDE_PASSWORT_HASH = "e9d40c6f0f6c7eac9b714480e274f0535ad299c4822dfdeb5fb4df6b1bc0e7d1"; 
+
 const wohnungen = ["Haus", "App1", "App2", "App3", "App4"];
 const monatsNamen = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 
 let aktuellesDatum = new Date(); let aktuellerMonat = aktuellesDatum.getMonth(); let aktuellesJahr = aktuellesDatum.getFullYear();
-let ansichtModus = 'monat'; let istAdmin = false;
+let ansichtModus = 'monat'; 
+let istAdmin = false;
+let istFreund = false;
 
 // Arrays lokal zur Darstellung
 let buchungen = [];
@@ -268,7 +298,7 @@ let backupHistorie = JSON.parse(localStorage.getItem("ferienHistorie")) || [];
 let klickAuswahl = { aktiv: false, wohnungId: null, startDatum: null, tdElement: null };
 let modalWohnungId = null; let editingBuchungId = null;
 
-// Daten beim Start aus Supabase laden (mit sofortiger Fehlerprüfung)
+// Daten beim Start aus Supabase laden
 async function datenInitialLaden() {
 if (!navigator.onLine) { zeigeDatenbankFehler(); return; }
 let timeoutTimer = setTimeout(() => {
@@ -316,16 +346,28 @@ syncStatus.innerHTML = "🔴 Verbindung gestört";
 }
 }
 
-// Login / Logout
+// Logins / Logout
 async function login() {
 let pwd = prompt("Bitte Admin-Passwort eingeben:");
 if (!pwd) return;
 if (await sha256(pwd) === ADMIN_PASSWORT_HASH) {
-istAdmin = true; document.body.className = "mode-admin"; klickAuswahl.aktiv = false;
+istAdmin = true; istFreund = false; document.body.className = "mode-admin"; klickAuswahl.aktiv = false;
 kalenderRendern(); listenRendern();
 } else { alert("Falsches Passwort!"); }
 }
-function logout() { istAdmin = false; document.body.className = "mode-gast"; klickAuswahl.aktiv = false; kalenderRendern(); }
+
+async function loginFreund() {
+let pwd = prompt("Bitte Familie & Freunde-Passwort eingeben:");
+if (!pwd) return;
+if (await sha256(pwd) === FREUNDE_PASSWORT_HASH) {
+istFreund = true; istAdmin = false; document.body.className = "mode-freund"; klickAuswahl.aktiv = false;
+kalenderRendern(); 
+} else { alert("Falsches Passwort!"); }
+}
+
+function logout() { 
+istAdmin = false; istFreund = false; document.body.className = "mode-gast"; klickAuswahl.aktiv = false; kalenderRendern(); 
+}
 
 function erstelleBackup(aktionText) {
 backupHistorie.unshift({ zeit: getZeitstempel(), aktion: aktionText, daten: JSON.stringify({ buchungen: buchungen, anfragen: anfragen }) });
@@ -347,7 +389,7 @@ document.getElementById("historyModal").style.display = "flex";
 }
 function closeHistoryModal() { document.getElementById("historyModal").style.display = "none"; }
 
-// Popups & Formulare
+// Popups (Admin & Anfrage)
 function openModal(wIndex, start, end) {
 document.getElementById("modalTitle").innerText = istAdmin ? "Neue Buchung" : "Buchungsanfrage";
 document.getElementById("modalStart").value = start; document.getElementById("modalEnd").value = end;
@@ -359,7 +401,7 @@ cbContainer.innerHTML += `<label><input type="checkbox" class="multi-wohnung-cb"
 updateModalDetails(); 
 document.getElementById("modalName").value = ""; 
 document.getElementById("modalKontakt").value = "";
-document.getElementById("modalErsteller").value = ""; // Neues Feld zurücksetzen
+document.getElementById("modalErsteller").value = ""; 
 document.getElementById("bookingModal").style.display = "flex";
 }
 
@@ -374,7 +416,7 @@ function closeModal() { document.getElementById("bookingModal").style.display = 
 async function submitModal() {
 let start = document.getElementById("modalStart").value; let end = document.getElementById("modalEnd").value;
 let gastName = document.getElementById("modalName").value.trim(); let kontakt = document.getElementById("modalKontakt").value.trim();
-let ersteller = document.getElementById("modalErsteller").value.trim(); // Ersteller Feld
+let ersteller = document.getElementById("modalErsteller").value.trim();
 
 if (!start || !end || start >= end) { alert("Bitte prüfe das Datum."); return; }
 if (gastName === "") { alert("Name fehlt."); return; }
@@ -411,14 +453,14 @@ zeigeDatenbankFehler();
 }
 }
 
-// Edit Popups
+// Edit Popups (Nur Admin)
 function openEditModal(id) {
 let buchung = buchungen.find(b => b.id === id); if(!buchung) return;
 editingBuchungId = id; 
 document.getElementById("editWohnung").value = buchung.wohnungId; document.getElementById("editStart").value = buchung.startDatum;
 document.getElementById("editEnd").value = buchung.endDatum; document.getElementById("editName").value = buchung.gast; 
 document.getElementById("editKontakt").value = buchung.kontakt;
-document.getElementById("editErsteller").value = buchung.ersteller || ""; // Ersteller laden
+document.getElementById("editErsteller").value = buchung.ersteller || ""; 
 document.getElementById("editModal").style.display = "flex";
 }
 function closeEditModal() { document.getElementById("editModal").style.display = "none"; editingBuchungId = null; }
@@ -426,7 +468,7 @@ function closeEditModal() { document.getElementById("editModal").style.display =
 async function saveEditModal() {
 let wId = document.getElementById("editWohnung").value; let start = document.getElementById("editStart").value; let end = document.getElementById("editEnd").value;
 let name = document.getElementById("editName").value.trim(); let kontakt = document.getElementById("editKontakt").value.trim();
-let ersteller = document.getElementById("editErsteller").value.trim(); // Ersteller Feld
+let ersteller = document.getElementById("editErsteller").value.trim(); 
 
 if (!start || !end || start >= end) { alert("Datum prüfen!"); return; }
 if (name === "") { alert("Name fehlt."); return; }
@@ -437,7 +479,7 @@ if(index !== -1) {
 let alteWerte = { ...buchungen[index] };
 buchungen[index].wohnungId = parseInt(wId); buchungen[index].startDatum = start; buchungen[index].endDatum = end;
 buchungen[index].gast = name; buchungen[index].kontakt = kontakt || "-";
-buchungen[index].ersteller = ersteller || "Unbekannt"; // Speichern im Array
+buchungen[index].ersteller = ersteller || "Unbekannt";
 
 try {
 const { error } = await _supabase.from('buchungen').update({
@@ -469,6 +511,19 @@ zeigeDatenbankFehler();
 }
 }
 }
+
+// Familie & Freunde Details Popup (Nur Lesen)
+function openFreundModal(id) {
+let b = buchungen.find(x => x.id === id); if(!b) return;
+document.getElementById("fDetailObjekt").innerText = wohnungen[b.wohnungId];
+document.getElementById("fDetailStart").innerText = formatDatum(b.startDatum);
+document.getElementById("fDetailEnd").innerText = formatDatum(b.endDatum);
+document.getElementById("fDetailName").innerText = b.gast;
+document.getElementById("fDetailErsteller").innerText = b.ersteller || "Unbekannt";
+document.getElementById("freundModal").style.display = "flex";
+}
+function closeFreundModal() { document.getElementById("freundModal").style.display = "none"; }
+
 
 // Kalender Rendern & Navigation
 function ansichtWechseln() { ansichtModus = ansichtModus === 'monat' ? 'jahr' : 'monat'; document.getElementById("ansichtText").innerText = ansichtModus === 'monat' ? 'Monat' : 'Jahr'; klickAuswahl.aktiv = false; kalenderRendern(); }
@@ -522,18 +577,21 @@ else if (isMiddle) { tdTag.classList.add("voll-belegt"); tdTag.innerText = "X"; 
 else if (isCheckOut) { tdTag.classList.add("halb-out"); tdTag.innerText = "◁"; }
 else if (isCheckIn) { tdTag.classList.add("halb-in"); tdTag.innerText = "▷"; }
 
-if (istAdmin) {
+if (istAdmin || istFreund) {
 tdTag.onclick = () => {
-if(tagesBuchungen.length === 1) { openEditModal(tagesBuchungen[0].id); }
+if(tagesBuchungen.length === 1) { 
+istAdmin ? openEditModal(tagesBuchungen[0].id) : openFreundModal(tagesBuchungen[0].id);
+}
 else {
 let wahl = prompt(`Wechseltag:\n1: Abreise ${tagesBuchungen[0].gast}\n2: Anreise ${tagesBuchungen[1].gast}\nBitte "1" oder "2" tippen:`);
-if (wahl === "1") openEditModal(tagesBuchungen[0].id); if (wahl === "2") openEditModal(tagesBuchungen[1].id);
+if (wahl === "1") istAdmin ? openEditModal(tagesBuchungen[0].id) : openFreundModal(tagesBuchungen[0].id);
+if (wahl === "2") istAdmin ? openEditModal(tagesBuchungen[1].id) : openFreundModal(tagesBuchungen[1].id);
 }
 };
 } else {
 if (tagesBuchungen.length === 1 && (isCheckOut || isCheckIn) && !isMiddle) { tdTag.onclick = (e) => zelleKlick(wIndex, tagString, e.target); }
 }
-let hoverText = istAdmin ? tagesBuchungen.map(b => `${b.gast} | ${formatDatum(b.startDatum)} - ${formatDatum(b.endDatum)}`).join('\n---\n') : (isWechsel ? "Wechseltag" : "Belegt");
+let hoverText = (istAdmin || istFreund) ? tagesBuchungen.map(b => `${b.gast} | ${formatDatum(b.startDatum)} - ${formatDatum(b.endDatum)}`).join('\n---\n') : (isWechsel ? "Wechseltag" : "Belegt");
 tdTag.setAttribute("data-info", hoverText);
 }
 if(klickAuswahl.aktiv && klickAuswahl.wohnungId === wIndex && klickAuswahl.startDatum === tagString) tdTag.classList.add("klick-start");
@@ -687,7 +745,7 @@ const startDatumDDMMYYYY = values[3];
 const endDatumDDMMYYYY = values[4];
 const gast = values[5];
 const kontakt = values[6];
-const ersteller = values[7] || ""; // Neues CSV Feld
+const ersteller = values[7] || "";
 
 const wohnungId = wohnungen.indexOf(objekt);
 if (wohnungId === -1) continue;
